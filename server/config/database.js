@@ -8,9 +8,33 @@ const pool = mysql.createPool({
   database: process.env.DB_NAME,
   waitForConnections: true,
   connectionLimit: 10,
-  queueLimit: 0
+  queueLimit: 0,
+  enableKeepAlive: true,
+  keepAliveInitialDelay: 0,
+  multipleStatements: false, // Security: Prevent multiple SQL statements per query
+  dateStrings: true // Consistent date handling
 });
 
 const promisePool = pool.promise();
+
+// Add event listeners for connection monitoring
+pool.on('connection', (connection) => {
+  console.log('New database connection established');
+});
+
+pool.on('error', (err) => {
+  console.error('Database pool error:', err);
+});
+
+// Graceful shutdown handling
+process.on('SIGINT', () => {
+  pool.end((err) => {
+    if (err) {
+      console.error('Error closing pool:', err);
+    }
+    console.log('Database pool closed');
+    process.exit(0);
+  });
+});
 
 module.exports = promisePool;
