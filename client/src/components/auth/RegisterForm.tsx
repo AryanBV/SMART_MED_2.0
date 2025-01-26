@@ -3,7 +3,7 @@ import { useNavigate } from 'react-router-dom';
 import { useForm } from 'react-hook-form';
 import { zodResolver } from '@hookform/resolvers/zod';
 import * as z from 'zod';
-import { RegisterCredentials } from '@/interfaces/auth';
+import { LoginCredentials as RegisterCredentials } from '@/interfaces/auth';
 import { useAuth } from '@/contexts/AuthContext';
 import { Button } from '@/components/ui/button';
 import {
@@ -22,6 +22,7 @@ import {
   CardTitle,
 } from '@/components/ui/card';
 import { handleApiError } from '@/lib/error-utils';
+import axios from 'axios';
 
 const registerSchema = z.object({
   name: z.string()
@@ -57,10 +58,21 @@ const RegisterForm = () => {
 
   const onSubmit = async (data: RegisterCredentials) => {
     try {
+      // Add these debug logs
+      console.log('API Base URL:', import.meta.env.VITE_API_URL);
+      console.log('Complete registration URL:', `${import.meta.env.VITE_API_URL}/api/auth/register`);
+      console.log('Registration data:', data);
+      
       setIsLoading(true);
       await registerUser(data);
+      console.log('Registration successful');
       navigate('/dashboard');
     } catch (error) {
+      console.log('Registration failed:', error);
+      if (axios.isAxiosError(error)) {
+        console.log('Response data:', error.response?.data);
+        console.log('Response status:', error.response?.status);
+      }
       handleApiError(error);
     } finally {
       setIsLoading(false);

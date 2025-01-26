@@ -1,8 +1,11 @@
+// src/config/axios.ts
 import axios from 'axios';
 
-const baseURL = import.meta.env.VITE_API_URL || 'http://localhost:5000/api';
+const baseURL = import.meta.env.VITE_API_URL || 'http://localhost:5000';
 
-const axiosInstance = axios.create({
+console.log('API Base URL:', baseURL); // For debugging
+
+export const api = axios.create({
   baseURL,
   timeout: 10000,
   headers: {
@@ -11,8 +14,9 @@ const axiosInstance = axios.create({
 });
 
 // Request interceptor
-axiosInstance.interceptors.request.use(
+api.interceptors.request.use(
   (config) => {
+    console.log('Making request to:', config.url); // For debugging
     const token = localStorage.getItem('token');
     if (token) {
       config.headers.Authorization = `Bearer ${token}`;
@@ -20,38 +24,26 @@ axiosInstance.interceptors.request.use(
     return config;
   },
   (error) => {
+    console.error('Request error:', error);
     return Promise.reject(error);
   }
 );
 
 // Response interceptor
-axiosInstance.interceptors.response.use(
-  (response) => response,
+api.interceptors.response.use(
+  (response) => {
+    console.log('Response received:', response.status);
+    return response;
+  },
   async (error) => {
-    const originalRequest = error.config;
-
-    // Handle 401 (Unauthorized) errors
-    if (error.response?.status === 401 && !originalRequest._retry) {
-      originalRequest._retry = true;
-
-      try {
-        // TODO: Implement refresh token logic here
-        // const refreshToken = localStorage.getItem('refreshToken');
-        // const response = await axios.post(`${baseURL}/auth/refresh`, { refreshToken });
-        // const { token } = response.data;
-        // localStorage.setItem('token', token);
-        // originalRequest.headers.Authorization = `Bearer ${token}`;
-        // return axios(originalRequest);
-      } catch (refreshError) {
-        // Handle refresh token failure
-        localStorage.removeItem('token');
-        window.location.href = '/login';
-        return Promise.reject(refreshError);
-      }
+    console.error('Response error:', error.response?.status, error.response?.data);
+    
+    if (error.response?.status === 404) {
+      console.error('API endpoint not found:', error.config.url);
     }
 
     return Promise.reject(error);
   }
 );
 
-export default axiosInstance;
+export default api; // Keep default export for backward compatibility

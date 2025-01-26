@@ -1,10 +1,11 @@
-import axios from '@/config/axios';
-import { LoginCredentials, RegisterCredentials, AuthResponse } from '@/interfaces/auth';
+import { api } from '@/config/axios';
+import { isAxiosError } from 'axios';
+import { LoginCredentials, RegisterCredentials, AuthResponse } from './authTypes';
 
 export class AuthService {
   static async login(credentials: LoginCredentials): Promise<AuthResponse> {
     try {
-      const response = await axios.post<AuthResponse>('/auth/login', credentials);
+      const response = await api.post<AuthResponse>('/api/auth/login', credentials);
       return response.data;
     } catch (error) {
       throw this.handleError(error);
@@ -13,7 +14,7 @@ export class AuthService {
 
   static async register(credentials: RegisterCredentials): Promise<AuthResponse> {
     try {
-      const response = await axios.post<AuthResponse>('/auth/register', credentials);
+      const response = await api.post<AuthResponse>('/api/auth/register', credentials);
       return response.data;
     } catch (error) {
       throw this.handleError(error);
@@ -22,7 +23,7 @@ export class AuthService {
 
   static async logout(): Promise<void> {
     try {
-      await axios.post('/auth/logout');
+      await api.post('/api/auth/logout');
       localStorage.removeItem('token');
     } catch (error) {
       throw this.handleError(error);
@@ -31,7 +32,7 @@ export class AuthService {
 
   static async validateToken(): Promise<AuthResponse> {
     try {
-      const response = await axios.get<AuthResponse>('/auth/validate');
+      const response = await api.get<AuthResponse>('/api/auth/validate');
       return response.data;
     } catch (error) {
       throw this.handleError(error);
@@ -39,10 +40,12 @@ export class AuthService {
   }
 
   private static handleError(error: any): Error {
-    if (axios.isAxiosError(error)) {
+    if (isAxiosError(error)) {
       const message = error.response?.data?.message || 'An error occurred';
       return new Error(message);
     }
     return error;
   }
 }
+
+export { LoginCredentials };

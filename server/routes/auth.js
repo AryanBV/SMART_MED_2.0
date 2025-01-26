@@ -3,7 +3,7 @@ const router = express.Router();
 const authController = require('../controllers/authController');
 const auth = require('../middleware/auth');
 const { body } = require('express-validator');
-
+const db = require('../config/database'); 
 // Validation middleware
 const registerValidation = [
   body('email').isEmail().withMessage('Please enter a valid email'),
@@ -31,4 +31,24 @@ router.post('/login', loginValidation, authController.login);
 router.get('/validate', auth, authController.validate);
 router.post('/logout', auth, authController.logout);
 
+// Only for development
+router.get('/users', async (req, res) => {
+  try {
+    const [users] = await db.query('SELECT id, email, name, role, created_at FROM users');
+    // Remove password from results for security
+    res.json({ 
+      status: 'success', 
+      data: users.map(user => ({
+        ...user,
+        password: undefined
+      }))
+    });
+  } catch (error) {
+    console.error('Error fetching users:', error);
+    res.status(500).json({ 
+      status: 'error', 
+      message: 'Error fetching users' 
+    });
+  }
+});
 module.exports = router;

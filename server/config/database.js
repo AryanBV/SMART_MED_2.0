@@ -11,13 +11,12 @@ const pool = mysql.createPool({
   queueLimit: 0,
   enableKeepAlive: true,
   keepAliveInitialDelay: 0,
-  multipleStatements: false, // Security: Prevent multiple SQL statements per query
-  dateStrings: true // Consistent date handling
+  multipleStatements: false,
+  dateStrings: true
 });
 
 const promisePool = pool.promise();
 
-// Add event listeners for connection monitoring
 pool.on('connection', (connection) => {
   console.log('New database connection established');
 });
@@ -26,7 +25,6 @@ pool.on('error', (err) => {
   console.error('Database pool error:', err);
 });
 
-// Graceful shutdown handling
 process.on('SIGINT', () => {
   pool.end((err) => {
     if (err) {
