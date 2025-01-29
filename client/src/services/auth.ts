@@ -22,9 +22,10 @@ export class AuthService {
 
   static async register(credentials: RegisterCredentials): Promise<AuthResponse> {
     try {
-      const response = await api.post<AuthResponse>('/api/auth/register', credentials);
+      const response = await api.post<AuthResponse>(API_ENDPOINTS.AUTH.REGISTER, credentials);
       return response.data;
     } catch (error) {
+      console.error('Registration error details:', error);
       throw this.handleError(error);
     }
   }

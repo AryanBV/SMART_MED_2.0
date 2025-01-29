@@ -18,7 +18,11 @@ const LoginPage = () => {
   }, [isAuthenticated, user, navigate]);
 
   return (
-    <div className="min-h-screen flex items-center justify-center p-4">
+    <div className="min-h-screen flex flex-col items-center justify-center p-4">
+      <div className="text-center mb-8">
+        <h1 className="text-3xl font-bold">Welcome back</h1>
+        <p className="text-gray-600 mt-2">Please login to your account</p>
+      </div>
       <LoginForm />
     </div>
   );

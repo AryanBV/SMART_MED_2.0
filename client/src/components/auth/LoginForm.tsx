@@ -1,4 +1,3 @@
-// client/src/components/auth/LoginForm.tsx
 import React from 'react';
 import { useNavigate } from 'react-router-dom';
 import { useForm } from 'react-hook-form';
@@ -41,7 +40,6 @@ const LoginForm = () => {
     try {
       setIsLoading(true);
       const response = await login(data);
-      // Check if user has profile before navigating
       if (response.user.profileId) {
         navigate('/dashboard', { replace: true });
       } else {
@@ -69,7 +67,12 @@ const LoginForm = () => {
                 <FormItem>
                   <FormLabel>Email</FormLabel>
                   <FormControl>
-                    <Input placeholder="Enter your email" {...field} />
+                    <Input 
+                      type="email"
+                      className="w-full p-2 border rounded-md"
+                      placeholder="Enter your email" 
+                      {...field} 
+                    />
                   </FormControl>
                   <FormMessage />
                 </FormItem>
@@ -85,6 +88,7 @@ const LoginForm = () => {
                   <FormControl>
                     <Input
                       type="password"
+                      className="w-full p-2 border rounded-md"
                       placeholder="Enter your password"
                       {...field}
                     />
@@ -94,9 +98,26 @@ const LoginForm = () => {
               )}
             />
 
-            <Button type="submit" className="w-full" disabled={isLoading}>
+            <Button 
+              type="submit" 
+              className="w-full bg-primary text-white hover:bg-primary/90" 
+              disabled={isLoading}
+            >
               {isLoading ? 'Logging in...' : 'Login'}
             </Button>
+
+            <div className="text-center mt-4">
+              <p className="text-sm text-gray-600">
+                Don't have an account?{' '}
+                <Button
+                  variant="link"
+                  className="px-1 text-primary hover:text-primary/90"
+                  onClick={() => navigate('/register')}
+                >
+                  Register here
+                </Button>
+              </p>
+            </div>
           </form>
         </Form>
       </CardContent>

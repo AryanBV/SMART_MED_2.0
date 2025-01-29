@@ -8,65 +8,106 @@ const authController = {
     const { email, password, name } = req.body;
 
     try {
-      // Start a transaction
-      await db.beginTransaction();
+      const connection = await db.getConnection();
+      await connection.beginTransaction();
 
-      // Check if user already exists
-      const [existingUsers] = await db.query('SELECT id FROM users WHERE email = ?', [email]);
-      
-      if (existingUsers.length > 0) {
-        return res.status(400).json({ message: 'Email already registered' });
-      }
-
-      // Hash password
-      const salt = await bcrypt.genSalt(10);
-      const hashedPassword = await bcrypt.hash(password, salt);
-
-      // Create user
-      const [result] = await db.query(
-        'INSERT INTO users (email, password, name, role) VALUES (?, ?, ?, ?)',
-        [email, hashedPassword, name, 'parent']
-      );
-
-      const userId = result.insertId;
-
-      // Create initial profile
       try {
-        await Profile.create({
-          user_id: userId,
-          full_name: name, // Use the name from registration
-          date_of_birth: new Date().toISOString().split('T')[0], // Placeholder date, user can update later
-          gender: 'other', // Default value, user can update later
-          is_parent: true // Since we're setting role as 'parent'
+        // Check if user already exists
+        const [existingUsers] = await connection.query(
+          'SELECT id FROM users WHERE email = ?', 
+          [email]
+        );
+        
+        if (existingUsers.length > 0) {
+          connection.release();
+          return res.status(400).json({ 
+            status: 'error',
+            message: 'Email already registered' 
+          });
+        }
+
+        // Hash password
+        const salt = await bcrypt.genSalt(10);
+        const hashedPassword = await bcrypt.hash(password, salt);
+
+        // Create user with default status 'active'
+        const [userResult] = await connection.query(
+          'INSERT INTO users (email, password, name, role, status) VALUES (?, ?, ?, ?, ?)',
+          [email, hashedPassword, name, 'parent', 'active']
+        );
+
+        const userId = userResult.insertId;
+
+        // Create initial profile
+        const [profileResult] = await connection.query(
+          `INSERT INTO profiles (
+            user_id, 
+            full_name, 
+            date_of_birth, 
+            gender, 
+            is_parent,
+            profile_type,
+            profile_status
+          ) VALUES (?, ?, ?, ?, ?, ?, ?)`,
+          [
+            userId,
+            name,
+            new Date().toISOString().split('T')[0],
+            'other',
+            true,
+            'primary',
+            'active'
+          ]
+        );
+
+        // Update user with profile_id
+        await connection.query(
+          'UPDATE users SET profile_id = ? WHERE id = ?',
+          [profileResult.insertId, userId]
+        );
+
+        await connection.commit();
+        
+        // Generate token
+        const token = jwt.sign(
+          { 
+            id: userId, 
+            email, 
+            name, 
+            role: 'parent',
+            profileId: profileResult.insertId
+          },
+          process.env.JWT_SECRET,
+          { expiresIn: '24h' }
+        );
+
+        connection.release();
+
+        res.status(201).json({
+          status: 'success',
+          token,
+          user: {
+            id: userId.toString(),
+            email,
+            name,
+            role: 'parent',
+            profileId: profileResult.insertId.toString()
+          }
         });
-      } catch (profileError) {
-        await db.rollback();
-        throw profileError;
+
+      } catch (error) {
+        await connection.rollback();
+        connection.release();
+        throw error;
       }
 
-      // Commit the transaction
-      await db.commit();
-
-      // Generate token
-      const token = jwt.sign(
-        { id: userId, email, name, role: 'parent' },
-        process.env.JWT_SECRET,
-        { expiresIn: '24h' }
-      );
-
-      res.status(201).json({
-        token,
-        user: {
-          id: userId.toString(),
-          email,
-          name,
-          role: 'parent'
-        }
-      });
     } catch (error) {
-      await db.rollback();
       console.error('Registration error:', error);
-      res.status(500).json({ message: 'Error registering user' });
+      res.status(500).json({ 
+        status: 'error',
+        message: 'Error registering user',
+        error: error.message 
+      });
     }
   },
 
@@ -154,7 +195,7 @@ const authController = {
       res.status(500).json({ message: 'Error validating token' });
     }
   }, 
-  
+
   async logout(req, res) {
     // Since we're using JWT, we don't need to do anything server-side
     // The client will remove the token
