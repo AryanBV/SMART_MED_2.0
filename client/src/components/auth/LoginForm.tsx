@@ -1,10 +1,11 @@
+// client/src/components/auth/LoginForm.tsx
 import React from 'react';
 import { useNavigate } from 'react-router-dom';
 import { useForm } from 'react-hook-form';
 import { zodResolver } from '@hookform/resolvers/zod';
 import * as z from 'zod';
 import { LoginCredentials } from '@/interfaces/auth';
-import { useAuth } from '@/contexts/AuthContext';
+import { useAuth } from '@/contexts/AuthContext';  
 import { Button } from '@/components/ui/button';
 import {
   Form,
@@ -16,6 +17,7 @@ import {
 } from '@/components/ui/form';
 import { Input } from '@/components/ui/input';
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card';
+import { handleApiError } from '@/lib/error-utils';  
 
 const loginSchema = z.object({
   email: z.string().email('Invalid email address'),
@@ -38,8 +40,13 @@ const LoginForm = () => {
   const onSubmit = async (data: LoginCredentials) => {
     try {
       setIsLoading(true);
-      await login(data);
-      navigate('/dashboard');
+      const response = await login(data);
+      // Check if user has profile before navigating
+      if (response.user.profileId) {
+        navigate('/dashboard', { replace: true });
+      } else {
+        navigate('/create-profile', { replace: true });
+      }
     } catch (error) {
       handleApiError(error);
     } finally {
@@ -88,14 +95,7 @@ const LoginForm = () => {
             />
 
             <Button type="submit" className="w-full" disabled={isLoading}>
-              {isLoading ? (
-                <div className="flex items-center gap-2">
-                  <span className="loading loading-spinner"></span>
-                  Logging in...
-                </div>
-              ) : (
-                'Login'
-              )}
+              {isLoading ? 'Logging in...' : 'Login'}
             </Button>
           </form>
         </Form>

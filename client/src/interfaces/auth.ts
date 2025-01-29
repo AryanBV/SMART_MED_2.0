@@ -1,51 +1,36 @@
-import { api } from '@/config/axios';
-import { isAxiosError } from 'axios';
-import { LoginCredentials, RegisterCredentials, AuthResponse } from './authTypes';
-
-export class AuthService {
-  static async login(credentials: LoginCredentials): Promise<AuthResponse> {
-    try {
-      const response = await api.post<AuthResponse>('/api/auth/login', credentials);
-      return response.data;
-    } catch (error) {
-      throw this.handleError(error);
-    }
-  }
-
-  static async register(credentials: RegisterCredentials): Promise<AuthResponse> {
-    try {
-      const response = await api.post<AuthResponse>('/api/auth/register', credentials);
-      return response.data;
-    } catch (error) {
-      throw this.handleError(error);
-    }
-  }
-
-  static async logout(): Promise<void> {
-    try {
-      await api.post('/api/auth/logout');
-      localStorage.removeItem('token');
-    } catch (error) {
-      throw this.handleError(error);
-    }
-  }
-
-  static async validateToken(): Promise<AuthResponse> {
-    try {
-      const response = await api.get<AuthResponse>('/api/auth/validate');
-      return response.data;
-    } catch (error) {
-      throw this.handleError(error);
-    }
-  }
-
-  private static handleError(error: any): Error {
-    if (isAxiosError(error)) {
-      const message = error.response?.data?.message || 'An error occurred';
-      return new Error(message);
-    }
-    return error;
-  }
+// client/src/interfaces/auth.ts
+export interface LoginCredentials {
+  email: string;
+  password: string;
 }
 
-export { LoginCredentials };
+export interface RegisterCredentials {
+  name: string;
+  email: string;
+  password: string;
+  confirmPassword: string;
+}
+
+export interface User {
+  id: string;
+  name: string;
+  email: string;
+  role: string;
+  profileId: string | null;
+}
+
+export interface AuthResponse {
+  user: User;
+  token: string;
+}
+
+export interface AuthContextType {
+  user: AuthResponse['user'] | null;
+  isAuthenticated: boolean;
+  isLoading: boolean;
+  login: (credentials: LoginCredentials) => Promise<AuthResponse>;
+  register: (credentials: RegisterCredentials) => Promise<AuthResponse>;
+  logout: () => Promise<void>;
+  updateUser: (userData: Partial<AuthResponse['user']>) => void;
+  validateAuth: () => Promise<void>;
+}

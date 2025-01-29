@@ -10,6 +10,7 @@ import {
   FileText,
   LogOut
 } from 'lucide-react';
+import logo from '@/assets/logo.svg';
 
 export const Sidebar = () => {
   const location = useLocation();
@@ -46,16 +47,31 @@ export const Sidebar = () => {
     }
   };
 
+  const getUserFirstName = () => {
+    return user?.name?.split(' ')[0] || 'User';
+  };
+
   return (
-    <div className="min-h-screen w-64 bg-white border-r border-gray-200 p-4">
+    <div className="min-h-screen w-72 bg-white border-r border-gray-200 flex flex-col">
+      {/* Logo */}
+      <div className="flex items-center h-16 px-6 border-b border-gray-100">
+        <img 
+          src={logo} 
+          alt="SMART_MED" 
+          className="h-10 w-auto"
+        />
+      </div>
+
       {/* User Info */}
-      <div className="mb-8 p-4">
-        <h2 className="text-lg font-semibold">{user?.email}</h2>
+      <div className="px-6 py-4 mb-2 border-b border-gray-100">
+        <h2 className="text-lg font-semibold text-gray-900">
+          {getUserFirstName()}
+        </h2>
         <p className="text-sm text-gray-500">Welcome back!</p>
       </div>
 
       {/* Navigation */}
-      <nav className="space-y-2">
+      <nav className="flex-1 px-4 pt-2 space-y-1">
         {navigationItems.map((item) => (
           <Link
             key={item.href}
@@ -65,11 +81,11 @@ export const Sidebar = () => {
             <Button
               variant="ghost"
               className={cn(
-                "w-full justify-start",
-                location.pathname === item.href && "bg-gray-100"
+                "w-full justify-start text-gray-600 hover:text-gray-900",
+                location.pathname === item.href && "bg-gray-100 text-gray-900"
               )}
             >
-              <item.icon className="w-4 h-4 mr-2" />
+              <item.icon className="w-5 h-5 mr-3" />
               {item.title}
             </Button>
           </Link>
@@ -77,13 +93,13 @@ export const Sidebar = () => {
       </nav>
 
       {/* Logout Button */}
-      <div className="absolute bottom-4 w-56">
+      <div className="mt-auto px-4 pb-6 pt-4 border-t border-gray-100">
         <Button
           variant="ghost"
           className="w-full justify-start text-red-500 hover:text-red-600 hover:bg-red-50"
           onClick={handleLogout}
         >
-          <LogOut className="w-4 h-4 mr-2" />
+          <LogOut className="w-5 h-5 mr-3" />
           Logout
         </Button>
       </div>

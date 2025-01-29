@@ -1,60 +1,45 @@
 // src/pages/ProfilePage.tsx
-import React, { useEffect, useState } from 'react';
+import React from 'react';
 import { ProfileForm } from '@/components/profile/ProfileForm';
 import { ProfileService } from '@/services/profile';
 import { useToast } from '@/components/ui/use-toast';
-import { Profile, ProfileFormData } from '@/interfaces/profile';
+import { ProfileFormData } from '@/interfaces/profile';
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card';
+import { useNavigate } from 'react-router-dom';
+import { useAuth } from '@/contexts/AuthContext';
+import { useProfile } from '@/hooks/useProfile';
 
 const ProfilePage = () => {
-  const [profile, setProfile] = useState<Profile | null>(null);
-  const [loading, setLoading] = useState(true);
+  const navigate = useNavigate();
+  const { user, updateUser } = useAuth();
+  const { profile, loading, error } = useProfile();
   const { toast } = useToast();
 
-  const loadProfile = async () => {
-    try {
-      console.log('Attempting to load profile...');
-      const data = await ProfileService.getProfile();
-      console.log('Profile data received:', data);
-      setProfile(data);
-    } catch (error: any) {
-      console.error('Error loading profile:', error);
-      if (error.response?.status === 404) {
-        console.log('No profile found - new user');
-      } else {
-        toast({
-          title: "Error",
-          description: "Failed to load profile. Please try again.",
-          variant: "destructive",
-        });
-      }
-    } finally {
-      setLoading(false);
-    }
-  };
-
-  useEffect(() => {
-    loadProfile();
-  }, []);
+  console.log('ProfilePage render:', { profile, loading, error }); // Add logging
 
   const handleSubmit = async (data: ProfileFormData) => {
     try {
-      console.log('Submitting profile data:', data);
+      console.log('Submitting profile data:', data); // Add logging
+      
       if (profile) {
-        await ProfileService.updateProfile(data);
+        const updatedProfile = await ProfileService.updateProfile(data);
+        console.log('Profile updated:', updatedProfile); // Add logging
+        if (updatedProfile.id) {
+          updateUser({ profileId: updatedProfile.id.toString() });
+        }
       } else {
-        await ProfileService.createProfile({
-          full_name: data.full_name,
-          date_of_birth: data.date_of_birth,
-          gender: data.gender,
-          is_parent: data.is_parent || false
-        });
+        const newProfile = await ProfileService.createProfile(data);
+        console.log('New profile created:', newProfile); // Add logging
+        if (newProfile.id) {
+          updateUser({ profileId: newProfile.id.toString() });
+        }
+         navigate('/dashboard', { replace: true });
       }
+      
       toast({
         title: "Success",
         description: "Profile saved successfully",
       });
-      await loadProfile();
     } catch (error: any) {
       console.error('Profile save error:', error);
       toast({
@@ -65,23 +50,33 @@ const ProfilePage = () => {
     }
   };
 
+  if (error) {
+    return (
+      <div className="flex items-center justify-center min-h-[400px]">
+        <div className="text-red-500">Error loading profile: {error.message}</div>
+      </div>
+    );
+  }
+
   if (loading) {
     return (
-      <div className="flex items-center justify-center h-full">
-        <div className="animate-spin rounded-full h-8 w-8 border-b-2 border-gray-900"></div>
+      <div className="flex items-center justify-center min-h-[400px]">
+        <div className="animate-spin rounded-full h-8 w-8 border-b-2 border-primary"></div>
       </div>
     );
   }
 
   return (
-    <div className="container mx-auto">
-      <Card>
-        <CardHeader>
-          <CardTitle>{profile ? 'Edit Profile' : 'Create Profile'}</CardTitle>
+    <div className="max-w-2xl mx-auto py-8">
+      <Card className="shadow-md">
+        <CardHeader className="space-y-1 border-b border-gray-200">
+          <CardTitle className="text-2xl font-bold text-gray-900">
+            {profile ? 'Edit Profile' : 'Create Profile'}
+          </CardTitle>
         </CardHeader>
-        <CardContent>
+        <CardContent className="pt-6">
           <ProfileForm 
-            initialData={profile || undefined} 
+            initialData={profile || undefined}
             onSubmit={handleSubmit}
           />
         </CardContent>

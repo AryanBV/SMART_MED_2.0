@@ -1,9 +1,10 @@
+// client/src/components/auth/RegisterForm.tsx
 import React, { useState } from 'react';
 import { useNavigate } from 'react-router-dom';
 import { useForm } from 'react-hook-form';
 import { zodResolver } from '@hookform/resolvers/zod';
 import * as z from 'zod';
-import { LoginCredentials as RegisterCredentials } from '@/interfaces/auth';
+import { RegisterCredentials } from '@/interfaces/auth';
 import { useAuth } from '@/contexts/AuthContext';
 import { Button } from '@/components/ui/button';
 import {
@@ -41,10 +42,10 @@ const registerSchema = z.object({
   path: ["confirmPassword"],
 });
 
-const RegisterForm = () => {
+const RegisterForm: React.FC = () => {
   const navigate = useNavigate();
-  const { register: registerUser } = useAuth();
-  const [isLoading, setIsLoading] = useState(false);
+  const { register } = useAuth();
+  const [isLoading, setIsLoading] = useState(false);  // Moved inside component
 
   const form = useForm<RegisterCredentials>({
     resolver: zodResolver(registerSchema),
@@ -58,20 +59,13 @@ const RegisterForm = () => {
 
   const onSubmit = async (data: RegisterCredentials) => {
     try {
-      // Add these debug logs
-      console.log('API Base URL:', import.meta.env.VITE_API_URL);
-      console.log('Complete registration URL:', `${import.meta.env.VITE_API_URL}/api/auth/register`);
-      console.log('Registration data:', data);
-      
       setIsLoading(true);
-      await registerUser(data);
-      console.log('Registration successful');
+      await register(data);
       navigate('/dashboard');
     } catch (error) {
-      console.log('Registration failed:', error);
+      console.error('Registration failed:', error);
       if (axios.isAxiosError(error)) {
-        console.log('Response data:', error.response?.data);
-        console.log('Response status:', error.response?.status);
+        console.error('Response data:', error.response?.data);
       }
       handleApiError(error);
     } finally {
@@ -87,6 +81,7 @@ const RegisterForm = () => {
       <CardContent>
         <Form {...form}>
           <form onSubmit={form.handleSubmit(onSubmit)} className="space-y-6">
+            {/* Form fields remain the same */}
             <FormField
               control={form.control}
               name="name"

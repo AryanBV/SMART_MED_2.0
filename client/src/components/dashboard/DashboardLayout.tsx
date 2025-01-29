@@ -4,11 +4,15 @@ import { Sidebar } from './Sidebar';
 
 export const DashboardLayout = () => {
   return (
-    <div className="min-h-screen bg-gray-100">
-      <div className="flex">
+    <div className="dashboard-layout">
+      <div className="flex h-screen">
         <Sidebar />
-        <main className="flex-1 p-6">
-          <Outlet />
+        <main className="dashboard-content flex-1 overflow-hidden">
+          <div className="h-full overflow-auto">
+            <div className="max-w-7xl mx-auto">
+              <Outlet />
+            </div>
+          </div>
         </main>
       </div>
     </div>

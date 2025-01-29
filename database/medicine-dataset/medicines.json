@@ -1,0 +1,34 @@
+{
+    "medicines": [
+      {
+        "name": "Metformin",
+        "generic_name": "Metformin Hydrochloride",
+        "brand_name": "Glucophage",
+        "category": "Antidiabetic",
+        "dosage_form": "Tablet",
+        "strength": "500mg",
+        "manufacturer": "Various",
+        "is_prescription_required": true
+      },
+      {
+        "name": "Glimepiride",
+        "generic_name": "Glimepiride",
+        "brand_name": "Amaryl",
+        "category": "Antidiabetic",
+        "dosage_form": "Tablet",
+        "strength": "2mg",
+        "manufacturer": "Sanofi",
+        "is_prescription_required": true
+      },
+      {
+        "name": "Insulin",
+        "generic_name": "Insulin Glargine",
+        "brand_name": "Lantus",
+        "category": "Antidiabetic",
+        "dosage_form": "Injectable",
+        "strength": "100units/mL",
+        "manufacturer": "Sanofi",
+        "is_prescription_required": true
+      }
+    ]
+  }

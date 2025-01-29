@@ -8,36 +8,44 @@ import {
 
 const DashboardPage = () => {
   return (
-    <div className="space-y-6">
-      <h1 className="text-3xl font-bold">Dashboard</h1>
+    <div className="space-y-8">
+      <div className="pb-2 border-b border-gray-200">
+        <h1 className="text-3xl font-bold tracking-tight text-gray-900">Dashboard</h1>
+      </div>
       
       <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-6">
-        <Card>
-          <CardHeader>
-            <CardTitle>Family Members</CardTitle>
+        <Card className="hover:shadow-md transition-shadow">
+          <CardHeader className="pb-2">
+            <CardTitle className="text-lg font-semibold text-gray-700">Family Members</CardTitle>
           </CardHeader>
           <CardContent>
-            <p className="text-2xl font-bold">0</p>
-            <p className="text-sm text-gray-500">Total family members</p>
+            <div className="mt-2 space-y-1">
+              <p className="text-4xl font-bold text-gray-900">0</p>
+              <p className="text-sm text-gray-500">Total family members</p>
+            </div>
           </CardContent>
         </Card>
 
-        <Card>
-          <CardHeader>
-            <CardTitle>Documents</CardTitle>
+        <Card className="hover:shadow-md transition-shadow">
+          <CardHeader className="pb-2">
+            <CardTitle className="text-lg font-semibold text-gray-700">Documents</CardTitle>
           </CardHeader>
           <CardContent>
-            <p className="text-2xl font-bold">0</p>
-            <p className="text-sm text-gray-500">Total documents</p>
+            <div className="mt-2 space-y-1">
+              <p className="text-4xl font-bold text-gray-900">0</p>
+              <p className="text-sm text-gray-500">Total documents</p>
+            </div>
           </CardContent>
         </Card>
 
-        <Card>
-          <CardHeader>
-            <CardTitle>Recent Activity</CardTitle>
+        <Card className="hover:shadow-md transition-shadow">
+          <CardHeader className="pb-2">
+            <CardTitle className="text-lg font-semibold text-gray-700">Recent Activity</CardTitle>
           </CardHeader>
           <CardContent>
-            <p className="text-sm text-gray-500">No recent activity</p>
+            <div className="mt-2">
+              <p className="text-sm text-gray-500">No recent activity</p>
+            </div>
           </CardContent>
         </Card>
       </div>
