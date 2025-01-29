@@ -166,3 +166,15 @@ JOIN profiles p1 ON fr.parent_profile_id = p1.id
 JOIN profiles p2 ON fr.child_profile_id = p2.id;
 
 DESCRIBE profiles;
+
+ALTER TABLE family_relations 
+MODIFY COLUMN relationship_type ENUM('father', 'mother', 'son', 'daughter', 'husband', 'wife') NOT NULL;
+
+ALTER TABLE family_relations
+ADD COLUMN is_spouse BOOLEAN DEFAULT FALSE;
+
+ALTER TABLE family_relations 
+MODIFY COLUMN relation_type ENUM('biological', 'adopted', 'guardian', 'spouse') NOT NULL;
+
+
+ALTER TABLE users ADD COLUMN profile_id INT NULL REFERENCES profiles(id);
