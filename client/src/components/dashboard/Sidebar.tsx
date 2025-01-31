@@ -1,14 +1,15 @@
-// src/components/dashboard/Sidebar.tsx
+// File: /client/src/components/dashboard/Sidebar.tsx
+
 import { Link, useLocation } from 'react-router-dom';
 import { useAuth } from '@/contexts/AuthContext';
 import { cn } from '@/lib/utils';
 import { Button } from '@/components/ui/button';
 import {
   LayoutDashboard,
-  UserCircle,
   Users,
   FileText,
-  LogOut
+  LogOut,
+  Settings,
 } from 'lucide-react';
 import logo from '@/assets/logo.svg';
 
@@ -23,11 +24,6 @@ export const Sidebar = () => {
       href: '/dashboard'
     },
     {
-      title: 'Profile',
-      icon: UserCircle,
-      href: '/dashboard/profile'
-    },
-    {
       title: 'Family Tree',
       icon: Users,
       href: '/dashboard/family-tree'
@@ -36,6 +32,16 @@ export const Sidebar = () => {
       title: 'Documents',
       icon: FileText,
       href: '/dashboard/documents'
+    }
+  ];
+
+  const settingsItems = [
+    {
+      title: 'Settings',
+      icon: Settings,
+      href: '/dashboard/settings',
+      variant: 'ghost' as const,
+      className: 'text-gray-600 hover:text-gray-900'
     }
   ];
 
@@ -50,6 +56,18 @@ export const Sidebar = () => {
   const getUserFirstName = () => {
     return user?.name?.split(' ')[0] || 'User';
   };
+
+  const isSettingsActive = location.pathname.includes('/dashboard/settings');
+
+  const isExactPathMatch = (path: string) => {
+    return location.pathname === path;
+  };
+
+  // Add this helper function to check if settings section is active
+  const isInSettingsSection = (path: string) => {
+    return location.pathname.startsWith('/dashboard/settings') && path === '/dashboard/settings';
+  };
+
 
   return (
     <div className="min-h-screen w-72 bg-white border-r border-gray-200 flex flex-col">
@@ -70,7 +88,7 @@ export const Sidebar = () => {
         <p className="text-sm text-gray-500">Welcome back!</p>
       </div>
 
-      {/* Navigation */}
+      {/* Main Navigation */}
       <nav className="flex-1 px-4 pt-2 space-y-1">
         {navigationItems.map((item) => (
           <Link
@@ -81,8 +99,8 @@ export const Sidebar = () => {
             <Button
               variant="ghost"
               className={cn(
-                "w-full justify-start text-gray-600 hover:text-gray-900",
-                location.pathname === item.href && "bg-gray-100 text-gray-900"
+                "w-full justify-start text-gray-600 hover:text-gray-900 hover:bg-gray-100/80",
+                isExactPathMatch(item.href) && "bg-accent text-white hover:bg-accent/90 hover:text-white"
               )}
             >
               <item.icon className="w-5 h-5 mr-3" />
@@ -92,8 +110,25 @@ export const Sidebar = () => {
         ))}
       </nav>
 
-      {/* Logout Button */}
-      <div className="mt-auto px-4 pb-6 pt-4 border-t border-gray-100">
+      {/* Settings & Logout Navigation */}
+      <div className="px-4 pb-4 pt-2 border-t border-gray-100 space-y-2">
+        {settingsItems.map((item) => (
+          <Link key={item.href} to={item.href} className="block">
+            <Button
+              variant={item.variant}
+              className={cn(
+                "w-full justify-start",
+                "text-gray-600 hover:text-gray-900 hover:bg-gray-100/80",
+                isInSettingsSection(item.href) && "bg-accent text-white hover:bg-accent/90 hover:text-white"
+              )}
+            >
+              <item.icon className="w-5 h-5 mr-3" />
+              {item.title}
+            </Button>
+          </Link>
+        ))}
+
+        {/* Logout Button */}
         <Button
           variant="ghost"
           className="w-full justify-start text-red-500 hover:text-red-600 hover:bg-red-50"
@@ -103,6 +138,7 @@ export const Sidebar = () => {
           Logout
         </Button>
       </div>
+
     </div>
   );
 };

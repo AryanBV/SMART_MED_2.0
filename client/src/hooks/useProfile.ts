@@ -4,7 +4,14 @@ import { Profile } from '@/interfaces/profile';
 import { ProfileService } from '@/services/profile';
 import { useAuth } from '@/contexts/AuthContext';
 
-export const useProfile = () => {
+interface UseProfileReturn {
+  profile: Profile | null;
+  loading: boolean;
+  error: Error | null;
+  fetchProfile: () => Promise<Profile | null>;
+}
+
+export const useProfile = (): UseProfileReturn => {
   const [profile, setProfile] = useState<Profile | null>(null);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState<Error | null>(null);
@@ -19,9 +26,7 @@ export const useProfile = () => {
     try {
       setLoading(true);
       setError(null);
-      console.log('Fetching profile...'); // Add logging
       const data = await ProfileService.getProfile();
-      console.log('Profile data received:', data); // Add logging
       setProfile(data);
       return data;
     } catch (error: any) {

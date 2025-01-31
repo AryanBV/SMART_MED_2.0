@@ -12,21 +12,51 @@ class Relationship {
 
     static async createSpouseRelation(spouse1Id, spouse2Id, relationshipType) {
         try {
-            // Start a transaction
+            console.log('Creating spouse relation:', { spouse1Id, spouse2Id, relationshipType });
             await db.beginTransaction();
-
-            // Create the spouse relation
-            const [result] = await db.execute(
+    
+            // Add first direction
+            const [result1] = await db.execute(
                 `INSERT INTO family_relations 
                  (parent_profile_id, child_profile_id, relation_type, relationship_type, is_spouse) 
                  VALUES (?, ?, 'spouse', ?, TRUE)`,
                 [spouse1Id, spouse2Id, relationshipType]
             );
-
+            console.log('First spouse relation created:', result1);
+    
+            // Add reverse direction
+            const [result2] = await db.execute(
+                `INSERT INTO family_relations 
+                 (parent_profile_id, child_profile_id, relation_type, relationship_type, is_spouse) 
+                 VALUES (?, ?, 'spouse', ?, TRUE)`,
+                [spouse2Id, spouse1Id, relationshipType === 'wife' ? 'husband' : 'wife']
+            );
+            console.log('Second spouse relation created:', result2);
+    
             await db.commit();
-            return result.insertId;
+            return true;
         } catch (error) {
+            console.error('Error in createSpouseRelation:', error);
             await db.rollback();
+            throw error;
+        }
+    }
+    
+    static async createParentChildRelation(parentId, childId, relationshipType) {
+        try {
+            console.log('Creating parent-child relation:', { parentId, childId, relationshipType });
+            
+            const [result] = await db.execute(
+                `INSERT INTO family_relations 
+                 (parent_profile_id, child_profile_id, relation_type, relationship_type, is_spouse) 
+                 VALUES (?, ?, 'biological', ?, FALSE)`,
+                [parentId, childId, relationshipType]
+            );
+            console.log('Parent-child relation created:', result);
+            
+            return true;
+        } catch (error) {
+            console.error('Error in createParentChildRelation:', error);
             throw error;
         }
     }

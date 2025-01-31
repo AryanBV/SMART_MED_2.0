@@ -1,4 +1,5 @@
-// src/components/profile/ProfileForm.tsx
+// File: /client/src/components/profile/ProfileForm.tsx
+
 import { zodResolver } from "@hookform/resolvers/zod";
 import { useForm } from "react-hook-form";
 import * as z from "zod";
@@ -20,36 +21,33 @@ import {
   SelectTrigger,
   SelectValue,
 } from "@/components/ui/select";
-import { Checkbox } from "@/components/ui/checkbox";
+import { Card } from "@/components/ui/card";
 import { useToast } from "@/components/ui/use-toast";
-
-const profileFormSchema = z.object({
-  full_name: z.string().min(2, "Full name must be at least 2 characters"),
-  date_of_birth: z.string().regex(/^\d{4}-\d{2}-\d{2}$/, "Invalid date format"),
-  gender: z.enum(["male", "female", "other"]),
-  is_parent: z.boolean().default(false)
-});
-
-type ProfileFormValues = z.infer<typeof profileFormSchema>;
+import { createProfileSchema, type CreateProfileSchema } from "@/validations/profileSchemas";
+import { BloodGroup, DiabetesType } from "@/interfaces/profile";
 
 interface ProfileFormProps {
-  initialData?: Partial<ProfileFormValues>;
-  onSubmit: (data: ProfileFormValues) => Promise<void>;
+  initialData?: Partial<CreateProfileSchema>;
+  onSubmit: (data: CreateProfileSchema) => Promise<void>;
+  isLoading?: boolean;
 }
 
-export function ProfileForm({ initialData, onSubmit }: ProfileFormProps) {
+const bloodGroups: BloodGroup[] = ['A+', 'A-', 'B+', 'B-', 'AB+', 'AB-', 'O+', 'O-'];
+const diabetesTypes: DiabetesType[] = ['type1', 'type2', 'gestational', 'none'];
+
+export function ProfileForm({ initialData, onSubmit, isLoading = false }: ProfileFormProps) {
   const { toast } = useToast();
-  const form = useForm<ProfileFormValues>({
-    resolver: zodResolver(profileFormSchema),
+  const form = useForm<CreateProfileSchema>({
+    resolver: zodResolver(createProfileSchema),
     defaultValues: initialData || {
       full_name: "",
       date_of_birth: "",
       gender: "male",
-      is_parent: false
+      emergency_contacts: [{ is_primary: true }],
     },
   });
 
-  const handleSubmit = async (data: ProfileFormValues) => {
+  const handleSubmit = async (data: CreateProfileSchema) => {
     try {
       await onSubmit(data);
       toast({
@@ -67,99 +65,166 @@ export function ProfileForm({ initialData, onSubmit }: ProfileFormProps) {
 
   return (
     <Form {...form}>
-      <form onSubmit={form.handleSubmit(handleSubmit)} className="space-y-6">
-        <div className="space-y-4">
-          {/* Full Name Field */}
-          <FormField
-            control={form.control}
-            name="full_name"
-            render={({ field }) => (
-              <FormItem>
-                <FormLabel className="text-base font-medium text-gray-900">Full Name</FormLabel>
-                <FormControl>
-                  <Input 
-                    {...field} 
-                    className="h-10"
-                    placeholder="Enter your full name"
-                  />
-                </FormControl>
-                <FormMessage />
-              </FormItem>
-            )}
-          />
-
-          {/* Date of Birth Field */}
-          <FormField
-            control={form.control}
-            name="date_of_birth"
-            render={({ field }) => (
-              <FormItem>
-                <FormLabel className="text-base font-medium text-gray-900">Date of Birth</FormLabel>
-                <FormControl>
-                  <Input 
-                    type="date" 
-                    {...field}
-                    className="h-10"
-                  />
-                </FormControl>
-                <FormMessage />
-              </FormItem>
-            )}
-          />
-
-          {/* Gender Field */}
-          <FormField
-            control={form.control}
-            name="gender"
-            render={({ field }) => (
-              <FormItem>
-                <FormLabel className="text-base font-medium text-gray-900">Gender</FormLabel>
-                <Select onValueChange={field.onChange} defaultValue={field.value}>
+      <form onSubmit={form.handleSubmit(handleSubmit)} className="space-y-8">
+        {/* Basic Information */}
+        <div className="space-y-6">
+          <h3 className="text-lg font-medium">Basic Information</h3>
+          <div className="space-y-4">
+            <FormField
+              control={form.control}
+              name="full_name"
+              render={({ field }) => (
+                <FormItem>
+                  <FormLabel>Full Name</FormLabel>
                   <FormControl>
-                    <SelectTrigger className="h-10">
-                      <SelectValue placeholder="Select your gender" />
-                    </SelectTrigger>
+                    <Input {...field} placeholder="Enter your full name" disabled={isLoading} />
                   </FormControl>
-                  <SelectContent>
-                    <SelectItem value="male">Male</SelectItem>
-                    <SelectItem value="female">Female</SelectItem>
-                    <SelectItem value="other">Other</SelectItem>
-                  </SelectContent>
-                </Select>
-                <FormMessage />
-              </FormItem>
-            )}
-          />
+                  <FormMessage />
+                </FormItem>
+              )}
+            />
 
-          {/* Is Parent Checkbox */}
-          <FormField
-            control={form.control}
-            name="is_parent"
-            render={({ field }) => (
-              <FormItem className="flex items-start space-x-3 space-y-0 rounded-md border p-4">
-                <FormControl>
-                  <Checkbox
-                    checked={field.value}
-                    onCheckedChange={field.onChange}
-                    className="mt-1"
-                  />
-                </FormControl>
-                <div className="space-y-1 leading-none">
-                  <FormLabel className="text-base font-medium text-gray-900">Parent Account</FormLabel>
-                  <FormDescription>
-                    Enable this if you are creating a parent account to manage family members
-                  </FormDescription>
-                </div>
-              </FormItem>
-            )}
-          />
+            <FormField
+              control={form.control}
+              name="date_of_birth"
+              render={({ field }) => (
+                <FormItem>
+                  <FormLabel>Date of Birth</FormLabel>
+                  <FormControl>
+                    <Input type="date" {...field} disabled={isLoading} />
+                  </FormControl>
+                  <FormMessage />
+                </FormItem>
+              )}
+            />
+
+            <FormField
+              control={form.control}
+              name="gender"
+              render={({ field }) => (
+                <FormItem>
+                  <FormLabel>Gender</FormLabel>
+                  <Select onValueChange={field.onChange} defaultValue={field.value} disabled={isLoading}>
+                    <FormControl>
+                      <SelectTrigger>
+                        <SelectValue placeholder="Select gender" />
+                      </SelectTrigger>
+                    </FormControl>
+                    <SelectContent>
+                      <SelectItem value="male">Male</SelectItem>
+                      <SelectItem value="female">Female</SelectItem>
+                      <SelectItem value="other">Other</SelectItem>
+                    </SelectContent>
+                  </Select>
+                  <FormMessage />
+                </FormItem>
+              )}
+            />
+          </div>
+        </div>
+
+        {/* Medical Information */}
+        <div className="space-y-6">
+          <h3 className="text-lg font-medium">Medical Information</h3>
+          <div className="space-y-4">
+            <FormField
+              control={form.control}
+              name="diabetes_type"
+              render={({ field }) => (
+                <FormItem>
+                  <FormLabel>Diabetes Type</FormLabel>
+                  <Select onValueChange={field.onChange} defaultValue={field.value} disabled={isLoading}>
+                    <FormControl>
+                      <SelectTrigger>
+                        <SelectValue placeholder="Select diabetes type" />
+                      </SelectTrigger>
+                    </FormControl>
+                    <SelectContent>
+                      {diabetesTypes.map((type) => (
+                        <SelectItem key={type} value={type}>
+                          {type.charAt(0).toUpperCase() + type.slice(1)}
+                        </SelectItem>
+                      ))}
+                    </SelectContent>
+                  </Select>
+                  <FormMessage />
+                </FormItem>
+              )}
+            />
+
+            <FormField
+              control={form.control}
+              name="blood_group"
+              render={({ field }) => (
+                <FormItem>
+                  <FormLabel>Blood Group</FormLabel>
+                  <Select onValueChange={field.onChange} defaultValue={field.value} disabled={isLoading}>
+                    <FormControl>
+                      <SelectTrigger>
+                        <SelectValue placeholder="Select blood group" />
+                      </SelectTrigger>
+                    </FormControl>
+                    <SelectContent>
+                      {bloodGroups.map((group) => (
+                        <SelectItem key={group} value={group}>
+                          {group}
+                        </SelectItem>
+                      ))}
+                    </SelectContent>
+                  </Select>
+                  <FormMessage />
+                </FormItem>
+              )}
+            />
+
+            <div className="grid grid-cols-2 gap-4">
+              <FormField
+                control={form.control}
+                name="height"
+                render={({ field }) => (
+                  <FormItem>
+                    <FormLabel>Height (cm)</FormLabel>
+                    <FormControl>
+                      <Input 
+                        type="number" 
+                        {...field} 
+                        onChange={e => field.onChange(e.target.valueAsNumber)}
+                        disabled={isLoading}
+                      />
+                    </FormControl>
+                    <FormMessage />
+                  </FormItem>
+                )}
+              />
+
+              <FormField
+                control={form.control}
+                name="weight"
+                render={({ field }) => (
+                  <FormItem>
+                    <FormLabel>Weight (kg)</FormLabel>
+                    <FormControl>
+                      <Input 
+                        type="number" 
+                        {...field} 
+                        onChange={e => field.onChange(e.target.valueAsNumber)}
+                        disabled={isLoading}
+                      />
+                    </FormControl>
+                    <FormMessage />
+                  </FormItem>
+                )}
+              />
+            </div>
+          </div>
         </div>
 
         <Button 
           type="submit" 
-          className="w-full bg-primary hover:bg-primary/90 text-white h-11"
+          className="w-full"
+          disabled={isLoading}
         >
-          Save Profile
+          {isLoading ? "Saving..." : "Save Profile"}
         </Button>
       </form>
     </Form>

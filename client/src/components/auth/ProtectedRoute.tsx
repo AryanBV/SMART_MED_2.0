@@ -1,10 +1,12 @@
+// File: C:\Project\SMART_MED_2.0\client\src\components\auth\ProtectedRoute.tsx
+
 import { useEffect } from 'react';
-import { Navigate, useLocation } from 'react-router-dom';
+import { Navigate, useLocation, Outlet } from 'react-router-dom';
 import { useAuth } from '@/contexts/AuthContext';
 import { LoadingSpinner } from '@/components/ui/loading-spinner';
 
 interface ProtectedRouteProps {
-  children: React.ReactNode;
+  children?: React.ReactNode;
   requireProfile?: boolean;
 }
 
@@ -23,11 +25,18 @@ const ProtectedRoute: React.FC<ProtectedRouteProps> = ({
     return <Navigate to="/login" state={{ from: location }} replace />;
   }
 
-  if (requireProfile && !user?.profileId) {
+  // Special handling for create-profile route
+  if (location.pathname === '/create-profile') {
+    // If user already has a profile, redirect to dashboard
+    if (user?.profileId) {
+      return <Navigate to="/dashboard" replace />;
+    }
+  } else if (requireProfile && !user?.profileId) {
+    // For other routes, if profile is required but missing, redirect to create-profile
     return <Navigate to="/create-profile" state={{ from: location }} replace />;
   }
 
-  return <>{children}</>;
+  return children || <Outlet />;
 };
 
 export default ProtectedRoute;

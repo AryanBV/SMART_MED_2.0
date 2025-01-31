@@ -7,59 +7,52 @@ exports.getFamilyTree = async (req, res) => {
     try {
         console.log('Getting family tree for user:', req.user.id);
         
-        // First get all profiles for the current user
+        // First get all profiles
         const [profiles] = await db.execute(
             'SELECT id, full_name, DATE_FORMAT(date_of_birth, "%Y-%m-%d") as date_of_birth, gender, is_parent FROM profiles WHERE user_id = ?',
             [req.user.id]
         );
 
-        // Debug log for raw profiles
-        console.log('Raw profiles from database:', JSON.stringify(profiles, null, 2));
+        console.log('Fetched profiles:', profiles);
 
-        const relations = await Relationship.getFullFamilyTree();
-        
-        const nodes = profiles.map(profile => {
-            // Ensure date is properly formatted
-            const formattedProfile = {
-                ...profile,
-                date_of_birth: profile.date_of_birth ? profile.date_of_birth : null
-            };
-            
-            console.log('Processing profile with date:', formattedProfile.date_of_birth);
-            
-            return {
-                id: profile.id.toString(),
-                type: 'familyMember',
-                data: {
-                    profile: {
-                        id: profile.id,
-                        full_name: profile.full_name,
-                        gender: profile.gender,
-                        date_of_birth: formattedProfile.date_of_birth,
-                        is_parent: Boolean(profile.is_parent)
-                    }
-                },
-                position: { x: Math.random() * 500, y: Math.random() * 500 }
-            };
-        });
+        // Get all relationships
+        const [relations] = await db.execute(`
+            SELECT 
+                fr.id,
+                fr.parent_profile_id,
+                fr.child_profile_id,
+                fr.relation_type,
+                fr.relationship_type,
+                fr.is_spouse
+            FROM family_relations fr
+            JOIN profiles p1 ON fr.parent_profile_id = p1.id
+            JOIN profiles p2 ON fr.child_profile_id = p2.id
+            WHERE p1.user_id = ? OR p2.user_id = ?
+        `, [req.user.id, req.user.id]);
 
-        // Debug log for final nodes structure
-        console.log('Final nodes structure:', JSON.stringify(nodes, null, 2));
+        console.log('Fetched relations:', relations);
 
+        // Create nodes
+        const nodes = profiles.map(profile => ({
+            id: profile.id.toString(),
+            type: 'familyMember',
+            data: { profile },
+            position: { x: 0, y: 0 }
+        }));
+
+        // Create edges
         const edges = relations.map(relation => ({
             id: `e${relation.id}`,
             source: relation.parent_profile_id.toString(),
             target: relation.child_profile_id.toString(),
-            type: 'smoothstep',
-            data: { relationship: relation.relation_type }
+            type: relation.is_spouse ? 'straight' : 'smoothstep',
+            data: { 
+                relationship: relation.relationship_type,
+                isSpouse: relation.is_spouse
+            }
         }));
 
-        // Log the complete response
-        console.log('Sending response:', JSON.stringify({ 
-            nodeCount: nodes.length,
-            sampleNode: nodes[0],
-            edgeCount: edges.length 
-        }, null, 2));
+        console.log('Sending tree data:', { nodes, edges });
 
         res.json({ nodes, edges });
     } catch (error) {
@@ -126,58 +119,28 @@ exports.removeFamilyMember = async (req, res) => {
 exports.addFamilyRelation = async (req, res) => {
     try {
         const { parent_id, child_id, relationship_type } = req.body;
-        
-        // Add debug logging
-        console.log('Received relation request:', { parent_id, child_id, relationship_type });
-        
-        // Validate input
+        console.log('Adding family relation:', { parent_id, child_id, relationship_type });
+
         if (!parent_id || !child_id || !relationship_type) {
-            console.log('Missing required fields');
-            return res.status(400).json({ 
-                message: 'Invalid request', 
-                error: 'Parent ID, Child ID, and Relationship Type are required' 
-            });
+            return res.status(400).json({ message: 'Missing required fields' });
         }
 
-        // Convert IDs to numbers and validate
-        const parentId = Number(parent_id);
-        const childId = Number(child_id);
+        const isSpouseRelation = relationship_type === 'wife' || relationship_type === 'husband';
+        let result;
 
-        if (isNaN(parentId) || isNaN(childId)) {
-            console.log('Invalid ID format');
-            return res.status(400).json({ 
-                message: 'Invalid request', 
-                error: 'IDs must be valid numbers' 
-            });
+        if (isSpouseRelation) {
+            result = await Relationship.createSpouseRelation(parent_id, child_id, relationship_type);
+        } else {
+            result = await Relationship.createParentChildRelation(parent_id, child_id, relationship_type);
         }
 
-        // Create the relation
-        const [result] = await db.execute(
-            'INSERT INTO family_relations (parent_profile_id, child_profile_id, relation_type, relationship_type) VALUES (?, ?, ?, ?)',
-            [parentId, childId, 'biological', relationship_type] // Default to 'biological' for relation_type
-        );
-
-        console.log('Created relation:', { 
-            id: result.insertId, 
-            parent_id: parentId, 
-            child_id: childId,
-            relationship_type 
-        });
-
-        res.status(201).json({ 
-            id: result.insertId,
-            parent_id: parentId,
-            child_id: childId,
-            relationship_type,
-            message: 'Relation created successfully' 
+        res.status(201).json({
+            success: true,
+            message: `${isSpouseRelation ? 'Spouse' : 'Parent-child'} relation created successfully`
         });
     } catch (error) {
         console.error('Error in addFamilyRelation:', error);
-        res.status(500).json({ 
-            message: 'Server error', 
-            error: error.message,
-            stack: process.env.NODE_ENV === 'development' ? error.stack : undefined
-        });
+        res.status(500).json({ message: 'Server error', error: error.message });
     }
 };
 

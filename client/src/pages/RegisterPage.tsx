@@ -12,13 +12,7 @@ const RegisterPage = () => {
         </div>
         
         <RegisterForm />
-        
-        <p className="text-center text-sm text-gray-600">
-          Already have an account?{' '}
-          <Link to="/login" className="font-semibold text-primary hover:underline">
-            Login here
-          </Link>
-        </p>
+  
       </div>
     </div>
   );
