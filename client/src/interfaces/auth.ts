@@ -12,11 +12,13 @@ export interface RegisterCredentials {
 }
 
 export interface User {
-  id: string;
+  id: number;
   name: string;
   email: string;
   role: string;
-  profileId: string | null;
+  profileId: number | null;
+  status?: string;
+  lastLogin?: Date;
 }
 
 export interface AuthResponse {
@@ -25,12 +27,12 @@ export interface AuthResponse {
 }
 
 export interface AuthContextType {
-  user: AuthResponse['user'] | null;
+  user: User | null;  // Changed from AuthResponse['user'] to User
   isAuthenticated: boolean;
   isLoading: boolean;
   login: (credentials: LoginCredentials) => Promise<AuthResponse>;
   register: (credentials: RegisterCredentials) => Promise<AuthResponse>;
   logout: () => Promise<void>;
-  updateUser: (userData: Partial<AuthResponse['user']>) => void;
+  updateUser: (userData: Partial<User>) => void;  // Changed to use User type
   validateAuth: () => Promise<void>;
 }

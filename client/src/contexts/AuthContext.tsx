@@ -1,8 +1,7 @@
-// File: client/src/contexts/AuthContext.tsx
-
+// client/src/contexts/AuthContext.tsx
 import React, { createContext, useContext, useState, useEffect, useCallback } from 'react';
 import { AuthService } from '@/services/auth';
-import { AuthContextType, AuthResponse, LoginCredentials, RegisterCredentials } from '@/interfaces/auth';
+import { AuthContextType, AuthResponse, LoginCredentials, RegisterCredentials, User } from '@/interfaces/auth';
 import { AUTH_ERROR_EVENT } from '@/config/axios';
 import { useNavigate } from 'react-router-dom';
 
@@ -17,7 +16,7 @@ export const useAuth = () => {
 };
 
 export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children }) => {
-  const [user, setUser] = useState<AuthResponse['user'] | null>(null);
+  const [user, setUser] = useState<User | null>(null);  // Changed type to User
   const [isAuthenticated, setIsAuthenticated] = useState<boolean>(false);
   const [isLoading, setIsLoading] = useState(true);
   const navigate = useNavigate();
@@ -132,13 +131,13 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children
     }
   };
 
-  const updateUser = (userData: Partial<AuthResponse['user']>) => {
+  const updateUser = (userData: Partial<User>) => {  // Changed type to User
     if (user) {
       setUser({ ...user, ...userData });
     }
   };
 
-  const value = {
+  const value: AuthContextType = {  // Explicitly type the value
     user,
     isAuthenticated,
     isLoading,

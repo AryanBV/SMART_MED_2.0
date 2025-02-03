@@ -15,7 +15,7 @@
     "noUncheckedIndexedAccess": true,
     "isolatedModules": true,
     "moduleDetection": "force",
-    "noEmit": true
+    "noEmit": false
   },
   "include": ["vite.config.ts"]
 }

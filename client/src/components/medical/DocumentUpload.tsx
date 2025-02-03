@@ -16,7 +16,7 @@ import {
 } from "@/components/ui/select";
 
 interface DocumentUploadProps {
-  onUploadComplete: (file: File) => Promise<void>;
+  onUploadComplete: (file: File, documentType: string) => Promise<void>;
   onProgress: (progress: number) => void;
   uploadProgress: number;
 }
@@ -61,7 +61,12 @@ const DocumentUpload: React.FC<DocumentUploadProps> = ({
 
     try {
       setIsProcessing(true);
-      await onUploadComplete(file);
+      await onUploadComplete(file, documentType);
+      console.log('Uploading document:', {
+        fileName: file.name,
+        type: documentType,
+        size: file.size
+      });
     } catch (error) {
       console.error('Upload error:', error);
       toast({

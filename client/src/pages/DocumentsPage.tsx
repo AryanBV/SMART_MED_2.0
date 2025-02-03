@@ -1,13 +1,19 @@
 // client/src/pages/DocumentsPage.tsx
 import { useState, useEffect } from 'react';
-import { Card, CardContent } from '@/components/ui/card';
-import { FileText, Upload, Loader2, AlertTriangle } from 'lucide-react';
+import { Card } from '@/components/ui/card';
+import { Upload, Loader2, AlertTriangle } from 'lucide-react';
 import { Button } from '@/components/ui/button';
 import { useToast } from '@/components/ui/use-toast';
-import { DocumentService, Document, ExtractedMedicine } from '@/services/documents';
+import { DocumentService } from '@/services/documents';
+import { FamilyMemberDocument, ExtractedMedicine } from '@/interfaces/documentTypes';
 import DocumentUpload from '@/components/medical/DocumentUpload';
+import DocumentList from '@/components/medical/DocumentList';
+import FamilyDocumentSelector from '@/components/medical/FamilyDocumentSelector';
+import DocumentFilters from '@/components/medical/DocumentFilters';
 import ExtractedData from '@/components/medical/ExtractedData';
 import { useAuth } from '@/contexts/AuthContext';
+import type { AuthContextType } from '@/interfaces/auth';  // Changed this line
+import DocumentPreview from '@/components/medical/DocumentPreview';
 
 interface ExtractedDataState {
   medicines: ExtractedMedicine[];
@@ -15,22 +21,39 @@ interface ExtractedDataState {
 }
 
 const DocumentsPage = () => {
-  const { user } = useAuth();
+  const { user } = useAuth() as AuthContextType;  // Added type assertion here
   const { toast } = useToast();
-  const [documents, setDocuments] = useState<Document[]>([]);
+  const [documents, setDocuments] = useState<FamilyMemberDocument[]>([]);
+  const [selectedProfileId, setSelectedProfileId] = useState<number | null>(null);
+  const [documentType, setDocumentType] = useState<string>('all');
   const [isLoading, setIsLoading] = useState(true);
   const [showUpload, setShowUpload] = useState(false);
   const [extractedData, setExtractedData] = useState<ExtractedDataState | null>(null);
   const [uploadProgress, setUploadProgress] = useState(0);
   const [processingDocument, setProcessingDocument] = useState(false);
+  const [selectedDocument, setSelectedDocument] = useState<FamilyMemberDocument | null>(null);
+  const [isPreviewOpen, setIsPreviewOpen] = useState(false);
+
+  useEffect(() => {
+    if (user && user.profileId && !selectedProfileId) {
+      setSelectedProfileId(user.profileId);
+    }
+  }, [user, selectedProfileId]);
+
 
   const fetchDocuments = async () => {
-    if (!user?.profileId) return;
+    if (!selectedProfileId) return;
     
     try {
       setIsLoading(true);
-      const fetchedDocuments = await DocumentService.getDocuments();
-      setDocuments(fetchedDocuments);
+      const fetchedDocuments = await DocumentService.getDocuments(selectedProfileId);
+      
+      // Apply document type filter
+      const filteredDocuments = documentType === 'all'
+        ? fetchedDocuments
+        : fetchedDocuments.filter(doc => doc.document_type === documentType);
+      
+      setDocuments(filteredDocuments);
     } catch (error: any) {
       console.error('Error fetching documents:', error);
       toast({
@@ -44,19 +67,19 @@ const DocumentsPage = () => {
   };
 
   useEffect(() => {
-    if (user?.profileId) {
+    if (selectedProfileId) {
       fetchDocuments();
     }
-  }, [user?.profileId]);
+  }, [selectedProfileId, documentType]);
 
-  const handleUploadComplete = async (file: File) => {
-    if (!user?.profileId) return;
+  const handleUploadComplete = async (file: File, docType: string) => {
+    if (!selectedProfileId) return;
 
     try {
       setProcessingDocument(true);
       setUploadProgress(0);
       
-      const response = await DocumentService.uploadDocument(file);
+      const response = await DocumentService.uploadDocument(file, selectedProfileId, docType);
       
       if (response.extractedData) {
         setExtractedData({
@@ -65,12 +88,11 @@ const DocumentsPage = () => {
         });
       }
       
-      // Refresh documents list
       await fetchDocuments();
       
       toast({
         title: "Success",
-        description: response.message || "Document uploaded successfully",
+        description: "Document uploaded successfully",
       });
       
     } catch (error: any) {
@@ -117,11 +139,11 @@ const DocumentsPage = () => {
         });
       }
 
-      await fetchDocuments(); // Refresh the list to get updated status
+      await fetchDocuments();
       
       toast({
         title: "Success",
-        description: response.message || "Document reprocessed successfully",
+        description: "Document reprocessed successfully",
       });
     } catch (error: any) {
       console.error('Retry processing error:', error);
@@ -133,6 +155,11 @@ const DocumentsPage = () => {
     } finally {
       setProcessingDocument(false);
     }
+  };
+
+  const handleViewDocument = (document: FamilyMemberDocument) => {
+    setSelectedDocument(document);
+    setIsPreviewOpen(true);
   };
 
   if (!user?.profileId) {
@@ -148,7 +175,7 @@ const DocumentsPage = () => {
 
   return (
     <div className="space-y-6 p-6">
-      <div className="flex justify-between items-center">
+      <div className="flex flex-col sm:flex-row justify-between items-start sm:items-center gap-4">
         <h1 className="text-3xl font-bold">Medical Documents</h1>
         <Button
           onClick={() => setShowUpload(true)}
@@ -164,78 +191,46 @@ const DocumentsPage = () => {
         </Button>
       </div>
 
-      {isLoading ? (
-        <div className="flex justify-center items-center h-32">
-          <Loader2 className="w-8 h-8 animate-spin" />
-        </div>
+      <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-4">
+        <FamilyDocumentSelector
+          selectedProfileId={selectedProfileId}
+          onProfileSelect={setSelectedProfileId}
+        />
+        <DocumentFilters
+          documentType={documentType}
+          onDocumentTypeChange={setDocumentType}
+        />
+      </div>
+
+      {showUpload ? (
+        <DocumentUpload 
+          onUploadComplete={handleUploadComplete}
+          onProgress={setUploadProgress}
+          uploadProgress={uploadProgress}
+        />
+      ) : extractedData ? (
+        <ExtractedData 
+          medicines={extractedData.medicines}
+          rawText={extractedData.rawText}
+          onClose={() => setExtractedData(null)}
+        />
       ) : (
         <>
-          {showUpload ? (
-            <DocumentUpload 
-              onUploadComplete={handleUploadComplete}
-              onProgress={setUploadProgress}
-              uploadProgress={uploadProgress}
-            />
-          ) : extractedData ? (
-            <ExtractedData 
-              medicines={extractedData.medicines}
-              rawText={extractedData.rawText}
-              onClose={() => setExtractedData(null)}
-            />
-          ) : documents.length > 0 ? (
-            <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-6">
-              {documents.map((document) => (
-                <Card key={document.id}>
-                  <CardContent className="p-4">
-                    <div className="flex items-start justify-between">
-                      <div>
-                        <h3 className="font-medium">{document.file_name}</h3>
-                        <p className="text-sm text-gray-500">
-                          {new Date(document.created_at).toLocaleDateString()}
-                        </p>
-                      </div>
-                      <Button
-                        variant="ghost"
-                        size="sm"
-                        onClick={() => handleDeleteDocument(document.id)}
-                      >
-                        Delete
-                      </Button>
-                    </div>
-                    {document.processed_status === 'failed' && (
-                      <Button
-                        variant="outline"
-                        size="sm"
-                        className="mt-2"
-                        onClick={() => handleRetryProcessing(document.id)}
-                      >
-                        Retry Processing
-                      </Button>
-                    )}
-                  </CardContent>
-                </Card>
-              ))}
-            </div>
-          ) : (
-            <Card>
-              <CardContent className="p-6">
-                <div className="text-center py-12">
-                  <FileText className="w-12 h-12 mx-auto text-gray-400" />
-                  <h3 className="mt-4 text-lg font-medium">No documents yet</h3>
-                  <p className="mt-2 text-gray-500">
-                    Upload your medical documents to start managing them
-                  </p>
-                  <Button
-                    onClick={() => setShowUpload(true)}
-                    className="mt-4 flex items-center gap-2"
-                  >
-                    <Upload className="w-4 h-4" />
-                    Upload your first document
-                  </Button>
-                </div>
-              </CardContent>
-            </Card>
-          )}
+          <DocumentList
+            documents={documents}
+            isLoading={isLoading}
+            onDelete={handleDeleteDocument}
+            onRetryProcessing={handleRetryProcessing}
+            onView={handleViewDocument}
+          />
+          <DocumentPreview
+            document={selectedDocument}
+            isOpen={isPreviewOpen}
+            onClose={() => {
+              setIsPreviewOpen(false);
+              setSelectedDocument(null);
+            }}
+          />
         </>
       )}
     </div>

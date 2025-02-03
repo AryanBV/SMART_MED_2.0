@@ -12,6 +12,7 @@ import FamilyTreePage from '@/pages/FamilyTreePage';
 import DocumentsPage from '@/pages/DocumentsPage';
 import SettingsPage from '@/pages/SettingsPage';
 import { Toaster } from '@/components/ui/toaster';
+import OCRTestPage from '@/pages/OCRTestPage';
 
 function App() {
   return (
@@ -53,7 +54,8 @@ function App() {
           <Route index element={<DashboardPage />} />
           <Route path="family-tree" element={<FamilyTreePage />} />
           <Route path="documents" element={<DocumentsPage />} />
-
+          {/* Change this line */}
+          <Route path="ocr-test" element={<OCRTestPage />} /> {/* Remove the leading slash */}
           {/* Settings Routes */}
           <Route path="settings" element={<SettingsPage />}>
             <Route index element={<Navigate to="profile" replace />} />

@@ -53,11 +53,17 @@ export class AuthService {
 
   private static handleError(error: any): Error {
     if (isAxiosError(error)) {
-      const errorData = error.response?.data as AuthError;
-      const message = errorData?.message || 'An error occurred';
-      return new Error(message);
+        const errorData = error.response?.data;
+        const message = errorData?.message || error.response?.data || error.message || 'An error occurred';
+        console.error('Auth error details:', {
+            status: error.response?.status,
+            data: error.response?.data,
+            message: message
+        });
+        return new Error(message);
     }
-    return error;
+    console.error('Non-Axios error:', error);
+    return error instanceof Error ? error : new Error('An unknown error occurred');
   }
 }
 

@@ -2,12 +2,20 @@
 import React from 'react';
 import { Card, CardContent, CardHeader, CardTitle, CardDescription } from '@/components/ui/card';
 import { Badge } from '@/components/ui/badge';
-import { Pill, Clock, Calendar, XCircle, AlertTriangle, Copy, Check } from 'lucide-react';
+import { Pill, Clock, Calendar, XCircle, AlertTriangle, Copy, Check, AlertCircle } from 'lucide-react';
 import { Button } from '@/components/ui/button';
 import { ScrollArea } from '@/components/ui/scroll-area';
 import { Alert, AlertDescription } from '@/components/ui/alert';
 import { useToast } from '@/components/ui/use-toast';
-import { ExtractedMedicine } from '@/services/documents';
+// Removed problematic import and defined the ExtractedMedicine type locally
+interface ExtractedMedicine {
+  medicine_name: string;
+  confidence_score?: number;
+  dosage?: string;
+  frequency?: string;
+  duration?: string;
+  instructions?: string;
+}
 
 interface ExtractedDataProps {
   medicines: ExtractedMedicine[];
@@ -49,28 +57,37 @@ const ExtractedData: React.FC<ExtractedDataProps> = ({
     }
   };
 
-  const getConfidenceBadgeVariant = (score: number) => {
-    if (score > 0.9) return "success";
-    if (score > 0.7) return "default";
-    return "warning";
+  const getStatusBadge = () => {
+    switch (processingStatus) {
+      case 'completed':
+        return <Badge variant="completed">Processing Complete</Badge>;
+      case 'failed':
+        return <Badge variant="failed">Processing Failed</Badge>;
+      case 'partial':
+        return <Badge variant="warning">Partially Processed</Badge>;
+      default:
+        return null;
+    }
+  };
+
+  const getConfidenceBadge = (score: number) => {
+    if (score > 0.9) return <Badge variant="success">{Math.round(score * 100)}% Match</Badge>;
+    if (score > 0.7) return <Badge variant="info">{Math.round(score * 100)}% Match</Badge>;
+    return <Badge variant="warning">{Math.round(score * 100)}% Match</Badge>;
   };
 
   return (
     <div className="space-y-4">
       {processingStatus !== 'completed' && (
-        <Alert variant={processingStatus === 'failed' ? 'destructive' : 'warning'}>
-          <AlertTriangle className="w-4 h-4" />
-          <AlertDescription>
+        <Alert variant={processingStatus === 'failed' ? 'destructive' : 'default'}>
+          <AlertCircle className="w-4 h-4" />
+          <AlertDescription className="flex items-center gap-2">
             {processingStatus === 'failed' 
               ? 'Document processing failed. Some information might be missing or incorrect.'
               : 'Document was partially processed. Some information might be incomplete.'}
             {onRetry && (
-              <Button
-                variant="link"
-                className="ml-2 p-0 h-auto"
-                onClick={onRetry}
-              >
-                Retry processing
+              <Button variant="outline" size="sm" className="ml-2" onClick={onRetry}>
+                Retry Processing
               </Button>
             )}
           </AlertDescription>
@@ -78,78 +95,77 @@ const ExtractedData: React.FC<ExtractedDataProps> = ({
       )}
 
       <Card>
-        <CardHeader className="flex flex-row items-center justify-between">
-          <div>
-            <CardTitle>Extracted Medicines</CardTitle>
-            <CardDescription>
-              {medicines.length} medicines found in the document
-            </CardDescription>
+        <CardHeader className="space-y-1">
+          <div className="flex flex-col gap-2">
+            <div className="flex items-center justify-between">
+              <CardTitle>Extracted Medicines</CardTitle>
+              {onClose && (
+                <Button variant="ghost" size="sm" onClick={onClose} className="h-8 w-8 p-0">
+                  <XCircle className="w-4 h-4" />
+                </Button>
+              )}
+            </div>
+            <div className="flex flex-wrap items-center gap-2">
+              {getStatusBadge()}
+              <span className="text-sm text-muted-foreground">
+                <Badge variant="secondary">{medicines.length} medicines found</Badge>
+              </span>
+            </div>
           </div>
-          {onClose && (
-            <Button
-              variant="ghost"
-              size="sm"
-              onClick={onClose}
-            >
-              <XCircle className="w-4 h-4" />
-            </Button>
-          )}
         </CardHeader>
         <CardContent>
-          <ScrollArea className="h-[400px] pr-4">
+          <ScrollArea className="h-[calc(100vh-20rem)]">
             {medicines.length === 0 ? (
               <div className="text-center py-8">
                 <AlertTriangle className="w-12 h-12 text-yellow-500 mx-auto mb-2" />
                 <p className="text-gray-500">
-                  No medicines were found in the document
+                  No medicines were detected in this document
                 </p>
               </div>
             ) : (
               <div className="space-y-4">
                 {medicines.map((medicine, index) => (
-                  <div
-                    key={index}
-                    className="p-4 border rounded-lg hover:bg-gray-50 transition-colors"
-                  >
-                    <div className="flex items-start justify-between mb-2">
-                      <h3 className="text-lg font-semibold flex items-center gap-2">
-                        <Pill className="w-5 h-5" />
-                        {medicine.medicine_name}
-                      </h3>
-                      {medicine.confidence_score !== undefined && (
-                        <Badge variant={getConfidenceBadgeVariant(medicine.confidence_score)}>
-                          {Math.round(medicine.confidence_score * 100)}% confidence
-                        </Badge>
-                      )}
-                    </div>
+                  <Card key={index} className="hover:shadow-md transition-all">
+                    <CardContent className="p-4">
+                      <div className="flex items-start justify-between mb-3">
+                        <div className="flex items-center gap-2">
+                          <Pill className="w-5 h-5 text-blue-500" />
+                          <span className="text-lg font-semibold">{medicine.medicine_name}</span>
+                        </div>
+                        {medicine.confidence_score !== undefined && 
+                          getConfidenceBadge(medicine.confidence_score)
+                        }
+                      </div>
 
-                    <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-4 mt-2">
-                      {medicine.dosage && (
-                        <div className="flex items-center gap-2 text-sm">
-                          <Badge variant="outline">Dosage</Badge>
-                          {medicine.dosage}
-                        </div>
-                      )}
-                      {medicine.frequency && (
-                        <div className="flex items-center gap-2 text-sm">
-                          <Clock className="w-4 h-4" />
-                          {medicine.frequency}
-                        </div>
-                      )}
-                      {medicine.duration && (
-                        <div className="flex items-center gap-2 text-sm">
-                          <Calendar className="w-4 h-4" />
-                          {medicine.duration}
-                        </div>
-                      )}
-                    </div>
+                      <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-4">
+                        {medicine.dosage && (
+                          <div className="flex items-center gap-2">
+                            <Badge variant="prescription">Dosage</Badge>
+                            <span className="text-sm">{medicine.dosage}</span>
+                          </div>
+                        )}
+                        {medicine.frequency && (
+                          <div className="flex items-center gap-2">
+                            <Clock className="w-4 h-4 text-blue-500" />
+                            <span className="text-sm">{medicine.frequency}</span>
+                          </div>
+                        )}
+                        {medicine.duration && (
+                          <div className="flex items-center gap-2">
+                            <Calendar className="w-4 h-4 text-blue-500" />
+                            <span className="text-sm">{medicine.duration}</span>
+                          </div>
+                        )}
+                      </div>
 
-                    {medicine.instructions && (
-                      <p className="mt-2 text-sm text-gray-600 bg-gray-50 p-2 rounded">
-                        {medicine.instructions}
-                      </p>
-                    )}
-                  </div>
+                      {medicine.instructions && (
+                        <div className="mt-3 p-3 bg-gray-50 rounded-lg">
+                          <Badge variant="info" className="mb-2">Instructions</Badge>
+                          <p className="text-sm text-gray-600">{medicine.instructions}</p>
+                        </div>
+                      )}
+                    </CardContent>
+                  </Card>
                 ))}
               </div>
             )}
@@ -160,24 +176,24 @@ const ExtractedData: React.FC<ExtractedDataProps> = ({
       {showRawText && rawText && (
         <Card>
           <CardHeader className="flex flex-row items-center justify-between">
-            <CardTitle>Raw Extracted Text</CardTitle>
-            <Button
-              variant="ghost"
-              size="sm"
-              onClick={handleCopyText}
-              className="flex items-center gap-2"
-            >
+            <CardTitle>Extracted Text</CardTitle>
+            <Button variant="outline" size="sm" onClick={handleCopyText} className="flex items-center gap-2">
               {copied ? (
-                <Check className="w-4 h-4" />
+                <>
+                  <Check className="w-4 h-4" />
+                  <Badge variant="success">Copied!</Badge>
+                </>
               ) : (
-                <Copy className="w-4 h-4" />
+                <>
+                  <Copy className="w-4 h-4" />
+                  Copy Text
+                </>
               )}
-              {copied ? 'Copied!' : 'Copy'}
             </Button>
           </CardHeader>
           <CardContent>
             <ScrollArea className="h-[200px]">
-              <pre className="whitespace-pre-wrap text-sm bg-gray-50 p-4 rounded-lg">
+              <pre className="whitespace-pre-wrap text-sm bg-gray-50 p-4 rounded-lg border">
                 {rawText}
               </pre>
             </ScrollArea>

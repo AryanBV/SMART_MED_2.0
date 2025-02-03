@@ -180,8 +180,22 @@ const authController = {
       }
   
       const user = users[0];
-      // Return existing token claims without generating new token
+      
+      // Generate new token for refresh
+      const token = jwt.sign(
+        { 
+          id: user.id, 
+          email: user.email, 
+          name: user.name, 
+          role: user.role,
+          profileId: user.profile_id 
+        },
+        process.env.JWT_SECRET,
+        { expiresIn: '24h' }
+      );
+  
       res.json({
+        token, // Add this
         user: {
           id: user.id.toString(),
           email: user.email,

@@ -23,6 +23,29 @@ const badgeVariants = cva(
           "border-transparent bg-blue-100 text-blue-800 hover:bg-blue-200",
         error: 
           "border-transparent bg-red-100 text-red-800 hover:bg-red-200",
+        // Add new variants for document types
+        prescription:
+          "border-transparent bg-purple-100 text-purple-800 hover:bg-purple-200",
+        lab_report:
+          "border-transparent bg-indigo-100 text-indigo-800 hover:bg-indigo-200",
+        discharge_summary:
+          "border-transparent bg-teal-100 text-teal-800 hover:bg-teal-200",
+        // Add new variants for access levels
+        admin:
+          "border-transparent bg-emerald-100 text-emerald-800 hover:bg-emerald-200",
+        write:
+          "border-transparent bg-sky-100 text-sky-800 hover:bg-sky-200",
+        read:
+          "border-transparent bg-slate-100 text-slate-800 hover:bg-slate-200",
+        // Add processing status variants
+        pending:
+          "border-transparent bg-amber-100 text-amber-800 hover:bg-amber-200",
+        processing:
+          "border-transparent bg-cyan-100 text-cyan-800 hover:bg-cyan-200",
+        completed:
+          "border-transparent bg-emerald-100 text-emerald-800 hover:bg-emerald-200",
+        failed:
+          "border-transparent bg-rose-100 text-rose-800 hover:bg-rose-200",
       },
     },
     defaultVariants: {
@@ -35,10 +58,10 @@ export interface BadgeProps
   extends React.HTMLAttributes<HTMLDivElement>,
     VariantProps<typeof badgeVariants> {}
 
-function Badge({ className, variant, ...props }: BadgeProps) {
-  return (
-    <div className={cn(badgeVariants({ variant }), className)} {...props} />
-  )
-}
+  function Badge({ className, variant, ...props }: BadgeProps) {
+    return (
+      <span className={cn(badgeVariants({ variant }), className)} {...props} />
+    )
+  }
 
 export { Badge, badgeVariants }

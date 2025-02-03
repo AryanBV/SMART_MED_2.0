@@ -1,110 +1,72 @@
 // client/src/services/documents.ts
-import { api } from '@/config/axios';
+import axios from '@/config/axios';
+import { FamilyMemberDocument, DocumentUploadResponse, DocumentFilter } from '@/interfaces/documentTypes';
 
-// Define interfaces for better type safety
-export interface Document {
-  id: number;
-  profile_id: number;
-  file_name: string;
-  file_type: string;
-  file_size: number;
-  document_type: 'prescription' | 'lab_report' | 'discharge_summary' | 'other';
-  processed_status: 'pending' | 'processing' | 'completed' | 'failed';
-  created_at: string;
-  updated_at: string;
-}
+export class DocumentService {
+  static async uploadDocument(file: File, profileId: number, documentType: string): Promise<DocumentUploadResponse> {
+    const formData = new FormData();
+    formData.append('document', file);
+    formData.append('profileId', profileId.toString());
+    formData.append('documentType', documentType);
 
-export interface ExtractedMedicine {
-  id: number;
-  document_id: number;
-  medicine_name: string;
-  dosage?: string;
-  frequency?: string;
-  duration?: string;
-  instructions?: string;
-  confidence_score?: number;
-}
-
-export interface UploadResponse {
-  document: Document;
-  extractedData?: {
-    medicines: ExtractedMedicine[];
-    rawText: string;
-  };
-  message: string;
-}
-
-export const DocumentService = {
-  async uploadDocument(file: File, documentType: string = 'other'): Promise<UploadResponse> {
     try {
-      const formData = new FormData();
-      formData.append('document', file);
-      formData.append('documentType', documentType);
-
-      const response = await api.post<UploadResponse>('/api/documents/upload', formData, {
+      console.log('Uploading document:', { fileName: file.name, type: documentType, size: file.size });
+      
+      const response = await axios.post<DocumentUploadResponse>('/api/documents/upload', formData, {
         headers: {
           'Content-Type': 'multipart/form-data',
         },
-        // Add upload progress tracking
+        // Add timeout and onUploadProgress
+        timeout: 30000,
         onUploadProgress: (progressEvent) => {
-          const percentCompleted = Math.round((progressEvent.loaded * 100) / (progressEvent.total || 100));
+          const percentCompleted = Math.round((progressEvent.loaded * 100) / progressEvent.total!);
           console.log('Upload progress:', percentCompleted);
         },
       });
 
+      console.log('Upload response:', response.data);
       return response.data;
-    } catch (error) {
-      console.error('Error uploading document:', error);
-      throw error;
-    }
-  },
-
-  async getDocuments(): Promise<Document[]> {
-    try {
-      const response = await api.get<Document[]>('/api/documents');
-      return response.data;
-    } catch (error) {
-      console.error('Error fetching documents:', error);
-      throw error;
-    }
-  },
-
-  async getDocument(documentId: number): Promise<Document> {
-    try {
-      const response = await api.get<Document>(`/api/documents/${documentId}`);
-      return response.data;
-    } catch (error) {
-      console.error('Error fetching document:', error);
-      throw error;
-    }
-  },
-
-  async deleteDocument(documentId: number): Promise<void> {
-    try {
-      await api.delete(`/api/documents/${documentId}`);
-    } catch (error) {
-      console.error('Error deleting document:', error);
-      throw error;
-    }
-  },
-
-  async getExtractedData(documentId: number): Promise<ExtractedMedicine[]> {
-    try {
-      const response = await api.get<ExtractedMedicine[]>(`/api/documents/${documentId}/extracted-data`);
-      return response.data;
-    } catch (error) {
-      console.error('Error fetching extracted data:', error);
-      throw error;
-    }
-  },
-
-  async retryProcessing(documentId: number): Promise<UploadResponse> {
-    try {
-      const response = await api.post<UploadResponse>(`/api/documents/${documentId}/process`);
-      return response.data;
-    } catch (error) {
-      console.error('Error retrying document processing:', error);
+    } catch (error: any) {
+      console.error('Upload error:', error.response?.data || error.message);
       throw error;
     }
   }
-};
+
+  static async getDocuments(profileId?: number, filters?: DocumentFilter): Promise<FamilyMemberDocument[]> {
+    const params = {
+      ...filters,
+      profileId
+    };
+    
+    const response = await axios.get<FamilyMemberDocument[]>('/api/documents', { params });
+    return response.data;
+  }
+
+  static async getDocument(id: number): Promise<FamilyMemberDocument> {
+    const response = await axios.get<FamilyMemberDocument>(`/api/documents/${id}`);
+    return response.data;
+  }
+
+  static async deleteDocument(id: number): Promise<void> {
+    await axios.delete(`/api/documents/${id}`);
+  }
+
+  static async retryProcessing(id: number): Promise<DocumentUploadResponse> {
+    const response = await axios.post<DocumentUploadResponse>(`/api/documents/${id}/process`);
+    return response.data;
+  }
+
+  static async getExtractedData(id: number) {
+    const response = await axios.get(`/api/documents/${id}/extracted-data`);
+    return response.data;
+  }
+
+  static async updateDocumentAccess(id: number, access_level: string): Promise<void> {
+    await axios.patch(`/api/documents/${id}/access`, { access_level });
+  }
+
+  static async shareDocument(id: number, profileIds: number[]): Promise<void> {
+    await axios.post(`/api/documents/${id}/share`, { profileIds });
+  }
+  
+}
