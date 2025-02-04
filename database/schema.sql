@@ -176,5 +176,59 @@ ADD COLUMN is_spouse BOOLEAN DEFAULT FALSE;
 ALTER TABLE family_relations 
 MODIFY COLUMN relation_type ENUM('biological', 'adopted', 'guardian', 'spouse') NOT NULL;
 
+ALTER TABLE profiles
+ADD COLUMN diabetes_type ENUM('type1', 'type2', 'gestational', 'prediabetes', 'none') DEFAULT 'none',
+ADD COLUMN height DECIMAL(5,2), -- Store height in cm
+ADD COLUMN weight DECIMAL(5,2); -- Store weight in kg
 
-ALTER TABLE users ADD COLUMN profile_id INT NULL REFERENCES profiles(id);
+ALTER TABLE users
+ADD COLUMN theme ENUM('system', 'light', 'dark') DEFAULT 'system',
+ADD COLUMN language VARCHAR(10) DEFAULT 'en',
+ADD COLUMN push_notifications BOOLEAN DEFAULT true,
+ADD COLUMN email_verified BOOLEAN DEFAULT false,
+ADD COLUMN two_factor_enabled BOOLEAN DEFAULT false;
+
+CREATE TABLE user_document_settings (
+    id INT PRIMARY KEY AUTO_INCREMENT,
+    user_id INT,
+    auto_ocr_enabled BOOLEAN DEFAULT true,
+    compression_level INT DEFAULT 50,
+    auto_categorization BOOLEAN DEFAULT true,
+    created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
+    updated_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP ON UPDATE CURRENT_TIMESTAMP,
+    FOREIGN KEY (user_id) REFERENCES users(id) ON DELETE CASCADE
+);
+
+CREATE TABLE family_sharing_settings (
+    id INT PRIMARY KEY AUTO_INCREMENT,
+    user_id INT,
+    auto_document_sharing BOOLEAN DEFAULT false,
+    default_access_level ENUM('view_only', 'edit', 'full_access') DEFAULT 'view_only',
+    created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
+    updated_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP ON UPDATE CURRENT_TIMESTAMP,
+    FOREIGN KEY (user_id) REFERENCES users(id) ON DELETE CASCADE
+);
+
+CREATE INDEX idx_profile_diabetes ON profiles(diabetes_type);
+CREATE INDEX idx_user_settings ON users(theme, language);
+CREATE INDEX idx_document_settings_user ON user_document_settings(user_id);
+CREATE INDEX idx_family_settings_user ON family_sharing_settings(user_id);
+
+
+ALTER TABLE medical_documents
+ADD COLUMN access_level ENUM('private', 'family', 'shared') DEFAULT 'private',
+ADD COLUMN shared_with JSON DEFAULT NULL COMMENT 'Array of profile IDs with access',
+ADD COLUMN owner_profile_id INT,
+ADD CONSTRAINT fk_owner_profile FOREIGN KEY (owner_profile_id) REFERENCES profiles(id);
+
+-- Update existing records
+UPDATE medical_documents 
+SET owner_profile_id = profile_id, 
+    access_level = 'private' 
+WHERE owner_profile_id IS NULL;
+
+-- Add index for better query performance
+CREATE INDEX idx_document_access ON medical_documents(access_level);
+CREATE INDEX idx_document_owner ON medical_documents(owner_profile_id);
+
+SELECT id, file_name, file_path, mime_type FROM medical_documents ORDER BY id DESC LIMIT 1;
