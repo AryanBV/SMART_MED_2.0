@@ -24,6 +24,7 @@ export const FamilyService = {
     }
   },
 
+  // Modify the addSpouseRelation function
   addSpouseRelation: async (
     spouse1Id: number,
     spouse2Id: number,
@@ -31,10 +32,12 @@ export const FamilyService = {
   ): Promise<FamilyRelation> => {
     try {
         console.log('Adding spouse relation:', { spouse1Id, spouse2Id, relationshipType });
+        // Create a bi-directional relationship
         const response = await api.post<FamilyRelation>('/api/family/spouse-relation', {
             spouse1_id: spouse1Id,
             spouse2_id: spouse2Id,
-            relationship_type: relationshipType
+            relationship_type: relationshipType,
+            is_spouse: true
         });
         return response.data;
     } catch (error) {
@@ -42,6 +45,7 @@ export const FamilyService = {
         throw error;
     }
   },
+
   addFamilyRelation: async (
     parentId: number,
     childId: number,
@@ -67,7 +71,16 @@ export const FamilyService = {
     }
   },
 
-
+  updateFamilyMember: async (profileId: number, data: ProfileFormData): Promise<FamilyMember> => {
+    try {
+        const response = await api.put<FamilyMember>(`/api/family/member/${profileId}`, data);
+        return response.data;
+    } catch (error) {
+        console.error('Error updating family member:', error);
+        throw error;
+    }
+  },
+  
   removeFamilyRelation: async (relationId: number): Promise<void> => {
     try {
       await api.delete(`/api/family/relation/${relationId}`);

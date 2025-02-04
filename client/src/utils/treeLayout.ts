@@ -2,11 +2,14 @@
 import { FamilyTreeNode, FamilyTreeEdge } from '@/interfaces/family';
 
 // Layout constants
-const VERTICAL_SPACING = 200;    // Space between generations
-const MIN_NODE_WIDTH = 300;      // Minimum width for a node
-const SPOUSE_GAP = 150;          // Gap between spouses
-const SIBLING_GAP = 80;          // Gap between siblings
-const FAMILY_UNIT_GAP = 200;     // Gap between different family units
+export const VERTICAL_SPACING = 150;     
+export const HORIZONTAL_SPACING = 250;   
+export const CHILD_VERTICAL_OFFSET = 100; 
+export const MIN_NODE_WIDTH = 300;      
+export const SPOUSE_GAP = 150;          
+export const SIBLING_GAP = 100;            // Gap between different family units 
+export const FAMILY_UNIT_GAP = 200;     
+
 
 interface LayoutNode extends FamilyTreeNode {
   width?: number;
@@ -14,6 +17,7 @@ interface LayoutNode extends FamilyTreeNode {
   childIds?: string[];
   parentIds?: string[];
   level?: number;
+  processed?: boolean; // New flag to track processed nodes
 }
 
 export const calculateTreeLayout = (
@@ -24,7 +28,7 @@ export const calculateTreeLayout = (
 
   // Convert nodes to layout nodes with additional properties
   const layoutNodes: Map<string, LayoutNode> = new Map(
-    nodes.map(node => [node.id, { ...node, width: MIN_NODE_WIDTH }])
+    nodes.map(node => [node.id, { ...node, width: MIN_NODE_WIDTH, processed: false }])
   );
 
   // Build relationship maps
@@ -53,7 +57,7 @@ export const calculateTreeLayout = (
     .filter(node => !node.parentIds?.length)
     .map(node => node.id);
 
-  // Assign levels to nodes
+  // Enhanced level assignment with proper spouse handling
   const assignLevels = (nodeId: string, level: number = 0, visited: Set<string> = new Set()) => {
     if (visited.has(nodeId)) return;
     visited.add(nodeId);
@@ -63,27 +67,29 @@ export const calculateTreeLayout = (
 
     node.level = level;
 
-    // Process spouse at same level
-    if (node.spouseId && !visited.has(node.spouseId)) {
-      const spouse = layoutNodes.get(node.spouseId);
-      if (spouse) {
+  // Handle spouse level assignment without positioning as currentX is not available here
+  if (node.spouseId) {
+    const spouse = layoutNodes.get(node.spouseId);
+    if (spouse && spouse.level == null) {
         spouse.level = level;
-        assignLevels(node.spouseId, level, visited);
-      }
     }
+  }
 
     // Process children at next level
-    node.childIds?.forEach(childId => {
-      assignLevels(childId, level + 1, visited);
-    });
+    if (node.childIds) {
+      node.childIds.forEach(childId => {
+        assignLevels(childId, level + 1, visited);
+      });
+    }
   };
 
   rootNodes.forEach(rootId => assignLevels(rootId));
 
-  // Calculate initial positions
+  // Enhanced positioning algorithm
   const positionNodes = () => {
-    // Group nodes by level
     const nodesByLevel = new Map<number, string[]>();
+    
+    // Group nodes by level
     layoutNodes.forEach((node, id) => {
       if (typeof node.level !== 'number') return;
       
@@ -94,9 +100,8 @@ export const calculateTreeLayout = (
     });
 
     // Position nodes level by level
-    let maxY = 0;
     nodesByLevel.forEach((levelNodes, level) => {
-      let currentX = 0;
+      let currentX = HORIZONTAL_SPACING; // Start with initial offset
       
       // Sort nodes to keep family units together
       levelNodes.sort((a, b) => {
@@ -108,75 +113,70 @@ export const calculateTreeLayout = (
         if (nodeA.spouseId === b) return -1;
         if (nodeB.spouseId === a) return 1;
         
+        // Group siblings together
+        const parentA = nodeA.parentIds?.[0];
+        const parentB = nodeB.parentIds?.[0];
+        if (parentA === parentB) return 0;
+        
         return 0;
       });
 
+      // Position each node in the level
       levelNodes.forEach(nodeId => {
         const node = layoutNodes.get(nodeId);
-        if (!node) return;
-      
-        // Skip if already positioned with spouse
-        if (node.position && node.spouseId && layoutNodes.get(node.spouseId)?.position) return;
-      
-        const familyUnitWidth = node.spouseId ? (MIN_NODE_WIDTH * 2 + SPOUSE_GAP) : MIN_NODE_WIDTH;
-      
+        if (!node || node.processed) return;
+        
+        // Calculate family unit width
+        const familyUnitWidth = node.spouseId ? 
+          (MIN_NODE_WIDTH * 2 + SPOUSE_GAP) : MIN_NODE_WIDTH;
+
         // Position current node
         node.position = {
-          x: currentX + (node.spouseId ? 0 : MIN_NODE_WIDTH / 2),
-          y: level * VERTICAL_SPACING
+          x: currentX,
+          y: level * (VERTICAL_SPACING + CHILD_VERTICAL_OFFSET)
         };
-      
+        node.processed = true;
+
         // Position spouse if exists
         if (node.spouseId) {
           const spouse = layoutNodes.get(node.spouseId);
           if (spouse) {
             spouse.position = {
               x: currentX + MIN_NODE_WIDTH + SPOUSE_GAP,
-              y: level * VERTICAL_SPACING
+              y: level * (VERTICAL_SPACING + CHILD_VERTICAL_OFFSET)
             };
+            spouse.processed = true;
           }
         }
-      
+
+        // Position children
+        if (node.childIds?.length) {
+          const children = node.childIds
+            .map(id => layoutNodes.get(id))
+            .filter((child): child is LayoutNode => !!child);
+
+          if (children.length) {
+            const totalChildrenWidth = (children.length - 1) * (MIN_NODE_WIDTH + SIBLING_GAP);
+            let childStartX = currentX + (familyUnitWidth - totalChildrenWidth) / 2;
+
+            children.forEach((child, index) => {
+              child.position = {
+                x: childStartX + index * (MIN_NODE_WIDTH + SIBLING_GAP),
+                y: (level + 1) * (VERTICAL_SPACING + CHILD_VERTICAL_OFFSET)
+              };
+            });
+          }
+        }
+
         currentX += familyUnitWidth + FAMILY_UNIT_GAP;
       });
-
-      maxY = Math.max(maxY, level * VERTICAL_SPACING);
-    });
-
-    // Center children below parents
-    layoutNodes.forEach((node) => {
-      if (!node.childIds?.length) return;
-
-      const children = node.childIds
-        .map(id => layoutNodes.get(id))
-        .filter((child): child is LayoutNode => !!child);
-
-      if (!children.length) return;
-
-      const leftmostChild = Math.min(...children.map(child => child.position?.x || 0));
-      const rightmostChild = Math.max(...children.map(child => child.position?.x || 0));
-      const centerOfChildren = (leftmostChild + rightmostChild) / 2;
-
-      // If node has a spouse, center children below the middle of the couple
-      if (node.spouseId) {
-        const spouse = layoutNodes.get(node.spouseId);
-        if (spouse && node.position && spouse.position) {
-          const centerOfParents = (node.position.x + spouse.position.x + MIN_NODE_WIDTH) / 2;
-          const offset = centerOfParents - centerOfChildren;
-
-          children.forEach(child => {
-            if (child.position) {
-              child.position.x += offset;
-            }
-          });
-        }
-      }
     });
   };
 
   // Run the positioning algorithm
   positionNodes();
 
-  // Return the positioned nodes
+  // Reset processed flags and return positioned nodes
+  layoutNodes.forEach(node => delete node.processed);
   return Array.from(layoutNodes.values());
 };

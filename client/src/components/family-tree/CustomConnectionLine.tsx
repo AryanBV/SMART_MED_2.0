@@ -1,9 +1,15 @@
 // src/components/family-tree/CustomConnectionLine.tsx
-import { ConnectionLineComponentProps as OriginalConnectionLineComponentProps, getStraightPath, getSmoothStepPath } from 'reactflow';
+import { 
+  ConnectionLineComponentProps, 
+  getStraightPath, 
+  getSmoothStepPath,
+  Position,
+  MarkerType 
+} from 'reactflow';
 
-interface ConnectionLineComponentProps extends OriginalConnectionLineComponentProps {
+interface CustomConnectionLineProps extends ConnectionLineComponentProps {
   data?: {
-    relationship?: string;
+    relationship?: 'son' | 'daughter' | 'wife' | 'husband';
   };
 }
 
@@ -16,10 +22,11 @@ export function CustomConnectionLine({
   toPosition,
   connectionStatus,
   data
-}: ConnectionLineComponentProps) {
+}: CustomConnectionLineProps) {
   let edgePath = '';
+  const isSpouseRelationship = data?.relationship === 'wife' || data?.relationship === 'husband';
 
-  if (data?.relationship === 'wife' || data?.relationship === 'husband') {
+  if (isSpouseRelationship) {
     // Use straight lines for spouse relationships
     [edgePath] = getStraightPath({
       sourceX: fromX,
@@ -36,34 +43,38 @@ export function CustomConnectionLine({
       targetX: toX,
       targetY: toY,
       targetPosition: toPosition,
+      borderRadius: 8
     });
   }
-
-  const isSpouseRelationship = data?.relationship === 'wife' || data?.relationship === 'husband';
 
   return (
     <g>
       <path
         fill="none"
         strokeWidth={2}
-        className={
-          connectionStatus === 'valid'
+        style={{
+          stroke: connectionStatus === 'valid'
             ? isSpouseRelationship
-              ? 'stroke-pink-500'
-              : 'stroke-green-500'
+              ? '#FF69B4' // Pink for spouse relationships
+              : '#2563eb' // Blue for parent-child relationships
             : connectionStatus === 'invalid'
-            ? 'stroke-red-500'
-            : 'stroke-gray-400'
-        }
-        strokeDasharray={isSpouseRelationship ? '5,5' : 'none'}
+            ? '#ef4444' // Red for invalid connections
+            : '#94a3b8', // Gray for connecting state
+          strokeDasharray: isSpouseRelationship ? '5,5' : 'none',
+          transition: 'stroke 0.2s ease',
+        }}
         d={edgePath}
+        markerEnd={connectionStatus === 'valid' ? `url(#${MarkerType.Arrow})` : undefined}
       />
       {connectionStatus === 'invalid' && (
         <circle
           cx={toX}
           cy={toY}
           r={4}
-          className="fill-red-500"
+          style={{
+            fill: '#ef4444',
+            filter: 'drop-shadow(0 0 2px rgb(239 68 68 / 0.5))'
+          }}
         />
       )}
     </g>

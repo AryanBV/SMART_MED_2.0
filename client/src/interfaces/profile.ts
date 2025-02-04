@@ -1,9 +1,11 @@
 // src/interfaces/profile.ts
 
+// Basic types
 export type BloodGroup = 'A+' | 'A-' | 'B+' | 'B-' | 'AB+' | 'AB-' | 'O+' | 'O-';
 export type DiabetesType = 'type1' | 'type2' | 'gestational' | 'none';
 export type Gender = 'male' | 'female' | 'other';
 
+// Medical related interfaces
 export interface EmergencyContact {
   name: string;
   relationship: string;
@@ -23,35 +25,31 @@ export interface MedicalInformation {
   medications?: string[];
 }
 
-export interface Profile {
-  id?: string;
-  user_id?: string;
+// Basic profile information for family member creation
+export interface ProfileFormData {
   full_name: string;
   date_of_birth: string;
   gender: Gender;
   is_parent: boolean;
+}
+
+// Complete profile interface
+export interface Profile extends ProfileFormData {
+  id?: string;
+  user_id?: string;
   medical_info?: MedicalInformation;
   emergency_contacts?: EmergencyContact[];
   created_at?: string;
   updated_at?: string;
 }
 
-export interface CreateProfileFormData {
-  // Basic Information (Required)
-  full_name: string;
-  date_of_birth: string;
-  gender: Gender;
-  
-  // Medical Information (Optional)
+// For updating profile with medical information
+export interface CreateProfileFormData extends ProfileFormData {
   diabetes_type?: DiabetesType;
   blood_group?: BloodGroup;
   height?: number;
   weight?: number;
-  
-  // Emergency Contact (At least one required)
   emergency_contacts: EmergencyContact[];
-  
-  // Additional Information (Optional)
   allergies?: string[];
   medical_conditions?: string[];
   medications?: string[];

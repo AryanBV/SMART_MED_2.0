@@ -29,6 +29,7 @@ router.delete('/member/:id', familyController.removeFamilyMember);
 // Create family relation
 router.post('/relation', familyController.addFamilyRelation);
 
+router.put('/member/:id', familyController.updateFamilyMember);
 // Delete family relation
 router.delete('/relation/:id', familyController.removeFamilyRelation);
 

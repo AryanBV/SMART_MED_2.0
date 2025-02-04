@@ -1,10 +1,28 @@
 // client/src/hooks/useFamilyTree.ts
+
 import { useState, useCallback, useEffect } from 'react';
-import { useNodesState, useEdgesState, Connection, Node, Edge } from 'reactflow';
+import { 
+  useNodesState, 
+  useEdgesState, 
+  Connection, 
+  Node, 
+  Edge,
+  EdgeTypes, 
+  NodeTypes,
+  MarkerType 
+} from 'reactflow';
 import { FamilyService } from '@/services/family';
 import { ProfileFormData } from '@/interfaces/profile';
 import { FamilyTreeNode, FamilyTreeEdge, FamilyMember, RelationshipType } from '@/interfaces/family';
-import { calculateTreeLayout } from '@/utils/treeLayout';
+import { 
+  calculateTreeLayout, 
+  VERTICAL_SPACING, 
+  HORIZONTAL_SPACING,
+  SPOUSE_GAP,
+  MIN_NODE_WIDTH,
+  SIBLING_GAP,
+  CHILD_VERTICAL_OFFSET 
+} from '@/utils/treeLayout';
 import { useToast } from '@/components/ui/use-toast';
 
 interface RelationshipData {
@@ -13,10 +31,40 @@ interface RelationshipData {
   relationshipType: RelationshipType;
 }
 
+interface NodeData {
+  profile: FamilyMember;
+  isNew?: boolean;
+  isSelected?: boolean;
+}
+
+export interface CustomEdgeData {
+  relationship: RelationshipType;
+}
+
+const getEdgeStyle = (relationship: RelationshipType) => {
+  if (relationship === 'wife' || relationship === 'husband') {
+    return {
+      strokeDasharray: '5,5',
+      stroke: '#FF69B4',
+      strokeWidth: 2,
+      markerEnd: {
+        type: MarkerType.Arrow,
+      },
+    };
+  }
+  return {
+    stroke: '#2563eb',
+    strokeWidth: 2,
+    markerEnd: {
+      type: MarkerType.Arrow,
+    },
+  };
+};
+
 export const useFamilyTree = () => {
   const { toast } = useToast();
   const [nodes, setNodes, onNodesChange] = useNodesState<FamilyTreeNode[]>([]);
-  const [edges, setEdges, onEdgesChange] = useEdgesState<FamilyTreeEdge[]>([]);
+  const [edges, setEdges, onEdgesChange] = useEdgesState<FamilyTreeEdge>([]);
   const [isLoading, setIsLoading] = useState(true);
 
   const updateLayout = useCallback(() => {
@@ -28,9 +76,16 @@ export const useFamilyTree = () => {
     try {
       setIsLoading(true);
       const treeData = await FamilyService.getFamilyTree();
-      const layoutedNodes = calculateTreeLayout(treeData.nodes, treeData.edges);
+      
+      // Add edge styles based on relationship type
+      const styledEdges = treeData.edges.map(edge => ({
+        ...edge,
+        style: getEdgeStyle(edge.data?.relationship),
+      }));
+
+      const layoutedNodes = calculateTreeLayout(treeData.nodes, styledEdges);
       setNodes(layoutedNodes);
-      setEdges(treeData.edges);
+      setEdges(styledEdges);
     } catch (error) {
       console.error('Error loading family tree:', error);
       toast({
@@ -51,7 +106,7 @@ export const useFamilyTree = () => {
         edge.data?.relationship !== 'husband'
       )
       .map(edge => nodes.find(node => node.id === edge.source))
-      .filter((node): node is Node<{ profile: FamilyMember }> => !!node)
+      .filter((node): node is Node<NodeData> => !!node)
       .map(node => node.data.profile);
 
     const children = edges
@@ -61,19 +116,26 @@ export const useFamilyTree = () => {
         edge.data?.relationship !== 'husband'
       )
       .map(edge => nodes.find(node => node.id === edge.target))
-      .filter((node): node is Node<{ profile: FamilyMember }> => !!node)
+      .filter((node): node is Node<NodeData> => !!node)
       .map(node => node.data.profile);
 
-    const spouses = edges
-      .filter(edge => 
-        (edge.source === memberId || edge.target === memberId) &&
-        (edge.data?.relationship === 'wife' || edge.data?.relationship === 'husband')
-      )
-      .map(edge => {
-        const spouseId = edge.source === memberId ? edge.target : edge.source;
-        return nodes.find(node => node.id === spouseId);
+      const spouses = edges
+      .filter(edge => {
+          const isSpouseEdge = edge.data?.relationship === 'wife' || edge.data?.relationship === 'husband';
+          const isInvolved = edge.source === memberId || edge.target === memberId;
+          // Only include if it's a spouse edge and the current member is involved
+          return isSpouseEdge && isInvolved;
       })
-      .filter((node): node is Node<{ profile: FamilyMember }> => !!node)
+      .map(edge => {
+          // Get the ID of the other spouse
+          const spouseId = edge.source === memberId ? edge.target : edge.source;
+          return nodes.find(node => node.id === spouseId);
+      })
+      .filter((node): node is Node<NodeData> => !!node)
+      .filter((node, index, self) => 
+          // Remove duplicates based on ID
+          index === self.findIndex(n => n.data.profile.id === node.data.profile.id)
+      )
       .map(node => node.data.profile);
 
     const siblings = nodes
@@ -100,84 +162,104 @@ export const useFamilyTree = () => {
     return { parents, children, siblings, spouses };
   }, [nodes, edges]);
 
-  // In useFamilyTree.ts
-
   const addFamilyMember = useCallback(async (
     profileData: ProfileFormData,
     relationshipData?: RelationshipData
   ) => {
     try {
       const newMember = await FamilyService.createFamilyMember(profileData);
-  
+
       if (!newMember?.id) {
         throw new Error('Invalid member data received');
       }
-  
+
+      let initialPosition = { x: 0, y: 0 };
+
+      if (relationshipData) {
+        const parentNode = nodes.find(
+          n => n.id === relationshipData.primaryParentId.toString()
+        );
+
+        if (parentNode) {
+          const isSpouseRelation = 
+            relationshipData.relationshipType === 'husband' || 
+            relationshipData.relationshipType === 'wife';
+
+            if (isSpouseRelation) {
+              const isWife = relationshipData.relationshipType === 'wife';
+              initialPosition = {
+                  x: parentNode.position.x + (isWife ? 1 : -1) * (SPOUSE_GAP + MIN_NODE_WIDTH),
+                  y: parentNode.position.y
+              };
+          } else {
+            const siblings = edges
+              .filter(edge => 
+                edge.source === parentNode.id &&
+                edge.data?.relationship !== 'wife' &&
+                edge.data?.relationship !== 'husband'
+              )
+              .map(edge => edge.target);
+
+            const siblingCount = siblings.length;
+            const xOffset = siblingCount * (MIN_NODE_WIDTH + SIBLING_GAP);
+
+            initialPosition = {
+              x: parentNode.position.x + xOffset,
+              y: parentNode.position.y + VERTICAL_SPACING + CHILD_VERTICAL_OFFSET
+            };
+          }
+        }
+      }
+
       const newNode: FamilyTreeNode = {
         id: newMember.id.toString(),
         type: 'familyMember',
-        position: { x: 0, y: 0 },
+        position: initialPosition,
         data: { 
           profile: newMember,
           isNew: true
         },
       };
-  
-      const newNodes = [...nodes, newNode];
-      let newEdges = [...edges];
-  
+
+      let newEdge: FamilyTreeEdge | null = null;
+
       if (relationshipData) {
-        const isSpouseRelation = relationshipData.relationshipType === 'husband' || 
-                                relationshipData.relationshipType === 'wife';
-  
-        if (isSpouseRelation) {
-          const spouseEdge: FamilyTreeEdge = {
-            id: `e${relationshipData.primaryParentId}-${newMember.id}-spouse`,
-            source: relationshipData.primaryParentId.toString(),
-            target: newMember.id.toString(),
-            type: 'spouseEdge',
-            data: { relationship: relationshipData.relationshipType },
-            style: { 
-              stroke: '#FF69B4',
-              strokeWidth: 2,
-              strokeDasharray: '5,5'
-            }
-          };
-          newEdges = [...newEdges, spouseEdge];
-        } else {
-          const primaryEdge: FamilyTreeEdge = {
-            id: `e${relationshipData.primaryParentId}-${newMember.id}`,
-            source: relationshipData.primaryParentId.toString(),
-            target: newMember.id.toString(),
-            type: 'smoothstep',
-            data: { relationship: relationshipData.relationshipType }
-          };
-          newEdges = [...newEdges, primaryEdge];
-        }
+        const isSpouseRelation = 
+          relationshipData.relationshipType === 'husband' || 
+          relationshipData.relationshipType === 'wife';
+
+        newEdge = {
+          id: `e${relationshipData.primaryParentId}-${newMember.id}`,
+          source: relationshipData.primaryParentId.toString(),
+          target: newMember.id.toString(),
+          type: isSpouseRelation ? 'spouseEdge' : 'smoothstep',
+          data: { relationship: relationshipData.relationshipType },
+          style: getEdgeStyle(relationshipData.relationshipType),
+        };
+
+        // Add relationship in the backend
+        await FamilyService.addFamilyRelation(
+          relationshipData.primaryParentId,
+          newMember.id,
+          relationshipData.relationshipType
+        );
       }
-  
+
+      const newNodes = [...nodes, newNode];
+      const newEdges = newEdge ? [...edges, newEdge] : edges;
+
       const layoutedNodes = calculateTreeLayout(newNodes, newEdges);
       setNodes(layoutedNodes);
       setEdges(newEdges);
-  
+
       await loadFamilyTree();
-  
-      toast({
-        title: 'Success',
-        description: 'Family member added successfully',
-      });
-  
+
+      return newMember;
     } catch (error) {
       console.error('Error adding family member:', error);
-      toast({
-        title: 'Error',
-        description: error instanceof Error ? error.message : 'Failed to add family member',
-        variant: 'destructive',
-      });
       throw error;
     }
-  }, [nodes, edges, setNodes, setEdges, toast, loadFamilyTree]);
-
+  }, [nodes, edges, setNodes, setEdges, loadFamilyTree]);
 
   const updateFamilyMember = useCallback(async (profileId: number, data: ProfileFormData) => {
     try {
@@ -186,11 +268,11 @@ export const useFamilyTree = () => {
       setNodes(nds =>
         nds.map(node =>
           node.id === profileId.toString()
-            ? { ...node, data: { profile: updatedMember } }
+            ? { ...node, data: { ...node.data, profile: updatedMember } }
             : node
         )
       );
-
+  
       toast({
         title: 'Success',
         description: 'Family member updated successfully',
@@ -208,20 +290,14 @@ export const useFamilyTree = () => {
     }
   }, [setNodes, toast, loadFamilyTree]);
 
-  const removeFamilyMember = useCallback(async (memberId: number) => {
+  const removeFamilyMember = useCallback(async (profileId: number) => {
     try {
-      await FamilyService.removeFamilyMember(memberId);
-      setNodes(nds => nds.filter(node => node.id !== memberId.toString()));
-      setEdges(eds => 
-        eds.filter(edge => 
-          edge.source !== memberId.toString() && edge.target !== memberId.toString()
-        )
-      );
-      
+      await FamilyService.removeFamilyMember(profileId);
       toast({
         title: 'Success',
         description: 'Family member removed successfully',
       });
+      await loadFamilyTree();
     } catch (error) {
       console.error('Error removing family member:', error);
       toast({
@@ -231,7 +307,7 @@ export const useFamilyTree = () => {
       });
       throw error;
     }
-  }, [setNodes, setEdges, toast]);
+  }, [toast, loadFamilyTree]);
 
   const onConnect = useCallback(async (connection: Connection) => {
     try {

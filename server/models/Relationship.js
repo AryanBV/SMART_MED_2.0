@@ -1,46 +1,48 @@
 const db = require('../config/database');
 
 class Relationship {
-    static RELATIONSHIP_TYPES = ['child', 'parent', 'spouse', 'wife', 'husband'];
-    static async create(parentId, childId) {
-        const [result] = await db.execute(
-            'INSERT INTO family_relations (parent_profile_id, child_profile_id, relation_type) VALUES (?, ?, ?)',
-            [parentId, childId, 'biological'] // defaulting to biological for now
-        );
-        return result.insertId;
-    }
+  static RELATIONSHIP_TYPES = ['child', 'parent', 'spouse', 'wife', 'husband'];
 
-    static async createSpouseRelation(spouse1Id, spouse2Id, relationshipType) {
-        try {
-            console.log('Creating spouse relation:', { spouse1Id, spouse2Id, relationshipType });
-            await db.beginTransaction();
-    
-            // Add first direction
-            const [result1] = await db.execute(
-                `INSERT INTO family_relations 
-                 (parent_profile_id, child_profile_id, relation_type, relationship_type, is_spouse) 
-                 VALUES (?, ?, 'spouse', ?, TRUE)`,
-                [spouse1Id, spouse2Id, relationshipType]
-            );
-            console.log('First spouse relation created:', result1);
-    
-            // Add reverse direction
-            const [result2] = await db.execute(
-                `INSERT INTO family_relations 
-                 (parent_profile_id, child_profile_id, relation_type, relationship_type, is_spouse) 
-                 VALUES (?, ?, 'spouse', ?, TRUE)`,
-                [spouse2Id, spouse1Id, relationshipType === 'wife' ? 'husband' : 'wife']
-            );
-            console.log('Second spouse relation created:', result2);
-    
-            await db.commit();
-            return true;
-        } catch (error) {
-            console.error('Error in createSpouseRelation:', error);
-            await db.rollback();
-            throw error;
-        }
+  static async createSpouseRelation(spouse1Id, spouse2Id, relationshipType) {
+    let connection;
+    try {
+      // Get a dedicated connection from the pool
+      connection = await db.getConnection();
+      await connection.beginTransaction();
+
+      console.log('Creating spouse relation:', { spouse1Id, spouse2Id, relationshipType });
+      
+      // Add first direction
+      const [result1] = await connection.execute(
+        `INSERT INTO family_relations 
+         (parent_profile_id, child_profile_id, relation_type, relationship_type, is_spouse) 
+         VALUES (?, ?, 'spouse', ?, TRUE)`,
+        [spouse1Id, spouse2Id, relationshipType]
+      );
+      console.log('First spouse relation created:', result1);
+
+      // Add reverse direction (swap relationship type)
+      const [result2] = await connection.execute(
+        `INSERT INTO family_relations 
+         (parent_profile_id, child_profile_id, relation_type, relationship_type, is_spouse) 
+         VALUES (?, ?, 'spouse', ?, TRUE)`,
+        [spouse2Id, spouse1Id, relationshipType === 'wife' ? 'husband' : 'wife']
+      );
+      console.log('Second spouse relation created:', result2);
+
+      await connection.commit();
+      return true;
+    } catch (error) {
+      console.error('Error in createSpouseRelation:', error);
+      if (connection) {
+        await connection.rollback();
+      }
+      throw error;
+    } finally {
+      if (connection) connection.release();
     }
+  }
+
     
     static async createParentChildRelation(parentId, childId, relationshipType) {
         try {

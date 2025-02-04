@@ -23,7 +23,7 @@ import { ProfileFormData } from '@/interfaces/profile';
 import { validateRelationship } from '@/utils/relationshipValidator';
 import { FamilyMember } from '@/interfaces/family';
 import { useToast } from '@/components/ui/use-toast';
-import { RelationshipType } from '@/interfaces/family';
+import { RelationshipType, RelationshipData } from '@/interfaces/family';
 const nodeTypes = { familyMember: TreeNode };
 
 const FamilyTreeContent = () => {
@@ -63,7 +63,7 @@ const FamilyTreeContent = () => {
 
   const handleAddFamilyMember = async (
     data: ProfileFormData,
-    relationshipData?: RelationshipType
+    relationshipData?: RelationshipData
   ) => {
     try {
       console.log('Adding family member:', {
@@ -75,9 +75,9 @@ const FamilyTreeContent = () => {
         await addFamilyMember(data);
       } else {
         await addFamilyMember(data, {
-          primaryParentId: relationshipData.primaryParentId,
-          secondaryParentId: relationshipData.secondaryParentId,
-          relationshipType: relationshipData.relationshipType
+          primaryParentId: (relationshipData as any).primaryParentId,
+          secondaryParentId: (relationshipData as any).secondaryParentId,
+          relationshipType: (relationshipData as any).relationshipType
         });
       }
 
@@ -142,32 +142,30 @@ const FamilyTreeContent = () => {
       </div>
 
       <div className="flex gap-6 h-[calc(100vh-12rem)]">
-        <Card className="flex-1">
-          <CardContent className="p-6 h-full">
-            <div className="w-full h-full">
-              <ReactFlow
-                nodes={processedNodes}
-                edges={edges}
-                onNodesChange={onNodesChange}
-                onEdgesChange={onEdgesChange}
-                onConnect={onConnect}
-                onConnectStart={() => setValidationMessage(null)}
-                onConnectEnd={() => setValidationMessage(null)}
-                isValidConnection={isValidConnection}
-                nodeTypes={nodeTypes}
-                connectionMode={ConnectionMode.Strict}
-                connectionLineComponent={CustomConnectionLine}
-                fitView
-                minZoom={0.5}
-                maxZoom={1.5}
-                defaultEdgeOptions={{
-                  type: 'smoothstep',
-                  animated: true,
-                }}
-              >
-                <Background />
-                <Controls />
-                <MiniMap nodeStrokeColor="#666" nodeColor="#fff" nodeBorderRadius={2} />
+      <Card className="flex-1">
+  <CardContent className="p-6 h-full">
+    <div className="w-full h-full" style={{ width: '100%', height: '100%' }}>
+      <ReactFlow
+        nodes={processedNodes}
+        edges={edges}
+        onNodesChange={onNodesChange}
+        onEdgesChange={onEdgesChange}
+        onConnect={onConnect}
+        isValidConnection={isValidConnection}
+        nodeTypes={nodeTypes}
+        connectionMode={ConnectionMode.Strict}
+        connectionLineComponent={CustomConnectionLine}
+        fitView
+        minZoom={0.5}
+        maxZoom={1.5}
+        defaultEdgeOptions={{
+          type: 'smoothstep',
+          animated: true,
+        }}
+      >
+        <Background />
+        <Controls />
+        <MiniMap nodeStrokeColor="#666" nodeColor="#fff" nodeBorderRadius={2} />
                 <Panel position="top-left" className="bg-background/90 p-2 rounded-lg shadow-md">
                   <div className="text-sm space-y-1">
                     <div>• Click nodes to view details</div>

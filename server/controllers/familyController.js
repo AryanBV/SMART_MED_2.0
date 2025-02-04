@@ -189,6 +189,42 @@ exports.addSpouseRelation = async (req, res) => {
     }
 };
 
+exports.updateFamilyMember = async (req, res) => {
+    try {
+        const { id } = req.params;
+        const { full_name, date_of_birth, gender } = req.body;
+
+        // First check if this member belongs to the current user
+        const [member] = await db.execute(
+            'SELECT * FROM profiles WHERE id = ? AND user_id = ?',
+            [id, req.user.id]
+        );
+
+        if (!member.length) {
+            return res.status(404).json({ message: 'Family member not found' });
+        }
+
+        // Update the member
+        await db.execute(
+            `UPDATE profiles 
+             SET full_name = ?, date_of_birth = ?, gender = ?
+             WHERE id = ? AND user_id = ?`,
+            [full_name, date_of_birth, gender, id, req.user.id]
+        );
+
+        // Fetch and return the updated member
+        const [updatedMember] = await db.execute(
+            'SELECT id, full_name, DATE_FORMAT(date_of_birth, "%Y-%m-%d") as date_of_birth, gender, is_parent FROM profiles WHERE id = ?',
+            [id]
+        );
+
+        res.json(updatedMember[0]);
+    } catch (error) {
+        console.error('Error updating family member:', error);
+        res.status(500).json({ message: 'Server error', error: error.message });
+    }
+};
+
 exports.removeFamilyRelation = async (req, res) => {
     try {
         await db.execute(
