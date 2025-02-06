@@ -21,36 +21,6 @@
       "alternativeBrands": ["Glemax", "Glimpid", "Glimer"]
     },
     {
-      "id": "SIT001",
-      "brandName": "Januvia",
-      "genericName": "Sitagliptin",
-      "category": "DPP-4 Inhibitors",
-      "usedFor": "Type 2 Diabetes",
-      "commonDosages": ["25mg", "50mg", "100mg"],
-      "manufacturer": "Merck",
-      "alternativeBrands": ["Istavel", "Janumet", "Tesavel"]
-    },
-    {
-      "id": "EMP001",
-      "brandName": "Jardiance",
-      "genericName": "Empagliflozin",
-      "category": "SGLT2 Inhibitors",
-      "usedFor": "Type 2 Diabetes",
-      "commonDosages": ["10mg", "25mg"],
-      "manufacturer": "Boehringer Ingelheim",
-      "alternativeBrands": ["Jardianz", "Jardiance Duo"]
-    },
-    {
-      "id": "PIO001",
-      "brandName": "Actos",
-      "genericName": "Pioglitazone",
-      "category": "Thiazolidinediones",
-      "usedFor": "Type 2 Diabetes",
-      "commonDosages": ["15mg", "30mg", "45mg"],
-      "manufacturer": "Takeda",
-      "alternativeBrands": ["Pioz", "Piozone", "Pioglit"]
-    },
-    {
       "id": "INS001",
       "brandName": "Lantus",
       "genericName": "Insulin Glargine",
@@ -71,84 +41,62 @@
       "alternativeBrands": ["Fiasp", "NovoMix"]
     },
     {
-      "id": "VIL001",
-      "brandName": "Galvus",
-      "genericName": "Vildagliptin",
-      "category": "DPP-4 Inhibitors",
-      "usedFor": "Type 2 Diabetes",
-      "commonDosages": ["50mg"],
-      "manufacturer": "Novartis",
-      "alternativeBrands": ["Zomelis", "Galvumet"]
-    },
-    {
-      "id": "GLP001",
-      "brandName": "Victoza",
-      "genericName": "Liraglutide",
-      "category": "GLP-1 Receptor Agonists",
-      "usedFor": "Type 2 Diabetes",
-      "commonDosages": ["6mg/mL"],
-      "manufacturer": "Novo Nordisk",
-      "alternativeBrands": ["Saxenda"]
-    },
-    {
-      "id": "CAN001",
-      "brandName": "Invokana",
-      "genericName": "Canagliflozin",
+      "id": "EMP001",
+      "brandName": "Jardiance",
+      "genericName": "Empagliflozin",
       "category": "SGLT2 Inhibitors",
       "usedFor": "Type 2 Diabetes",
-      "commonDosages": ["100mg", "300mg"],
-      "manufacturer": "Janssen",
-      "alternativeBrands": ["Sulisent", "Prominad"]
+      "commonDosages": ["10mg", "25mg"],
+      "manufacturer": "Boehringer Ingelheim",
+      "alternativeBrands": ["Jardianz", "Jardiance Duo"]
     },
     {
-      "id": "GLC001",
-      "brandName": "Precose",
-      "genericName": "Acarbose",
-      "category": "Alpha-glucosidase Inhibitors",
-      "usedFor": "Type 2 Diabetes",
-      "commonDosages": ["25mg", "50mg", "100mg"],
-      "manufacturer": "Bayer",
-      "alternativeBrands": ["Glucobay", "Glumida"]
+      "id": "VIT001",
+      "brandName": "Generic Multivitamin",
+      "genericName": "Multivitamin",
+      "category": "Nutritional Supplements",
+      "usedFor": "General Health",
+      "commonDosages": ["Once daily"],
+      "manufacturer": "Various",
+      "alternativeBrands": ["Centrum", "One-A-Day", "Nature Made"]
     },
     {
-      "id": "DUA001",
-      "brandName": "Xigduo XR",
-      "genericName": "Dapagliflozin + Metformin",
-      "category": "SGLT2 Inhibitors + Biguanides",
-      "usedFor": "Type 2 Diabetes",
-      "commonDosages": ["5mg/1000mg", "10mg/1000mg"],
-      "manufacturer": "AstraZeneca",
-      "alternativeBrands": ["Forxiga Met", "Dapa-Met"]
+      "id": "VITD001",
+      "brandName": "Vitamin D3",
+      "genericName": "Cholecalciferol",
+      "category": "Nutritional Supplements",
+      "usedFor": "Vitamin D Deficiency",
+      "commonDosages": ["400IU", "1000IU", "2000IU", "5000IU"],
+      "manufacturer": "Various",
+      "alternativeBrands": ["Ddrops", "Nature Made D3", "NOW D3"]
     },
     {
-      "id": "GLU001",
-      "brandName": "Ozempic",
-      "genericName": "Semaglutide",
-      "category": "GLP-1 Receptor Agonists",
-      "usedFor": "Type 2 Diabetes",
-      "commonDosages": ["0.25mg", "0.5mg", "1mg"],
-      "manufacturer": "Novo Nordisk",
-      "alternativeBrands": ["Rybelsus"]
-    },
-    {
-      "id": "REP001",
-      "brandName": "Prandin",
-      "genericName": "Repaglinide",
-      "category": "Meglitinides",
-      "usedFor": "Type 2 Diabetes",
-      "commonDosages": ["0.5mg", "1mg", "2mg"],
-      "manufacturer": "Novo Nordisk",
-      "alternativeBrands": ["GlucoNorm", "NovoNorm"]
-    },
-    {
-      "id": "TRE001",
-      "brandName": "Cycloset",
-      "genericName": "Bromocriptine",
-      "category": "Dopamine Receptor Agonists",
-      "usedFor": "Type 2 Diabetes",
-      "commonDosages": ["0.8mg"],
-      "manufacturer": "VeroScience",
-      "alternativeBrands": ["Parlodel"]
+      "id": "SUP001",
+      "brandName": "Glucose Test Strips",
+      "genericName": "Blood Glucose Test Strips",
+      "category": "Medical Supplies",
+      "usedFor": "Blood Glucose Monitoring",
+      "commonDosages": ["N/A"],
+      "manufacturer": "Various",
+      "alternativeBrands": ["Accu-Chek", "OneTouch", "Contour"]
     }
+  ],
+  "version": "2.0",
+  "lastUpdated": "2024-02-06",
+  "categories": [
+    "Biguanides",
+    "Sulfonylureas",
+    "Long-acting Insulin",
+    "Rapid-acting Insulin",
+    "SGLT2 Inhibitors",
+    "Nutritional Supplements",
+    "Medical Supplies"
+  ],
+  "usageTypes": [
+    "Type 1 Diabetes",
+    "Type 2 Diabetes",
+    "General Health",
+    "Vitamin D Deficiency",
+    "Blood Glucose Monitoring"
   ]
 }

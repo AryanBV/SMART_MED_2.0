@@ -112,6 +112,113 @@ class Profile {
             throw error;
         }
     }
+
+    static async findFamilyMembers(profileId) {
+        try {
+            // Modified query to use correct column names
+            const [rows] = await db.query(`
+                WITH profile_documents AS (
+                    SELECT 
+                        profile_id,
+                        id as document_id,
+                        document_type,
+                        processed_status,
+                        last_processed_at,
+                        created_at as document_created_at
+                    FROM medical_documents
+                    ORDER BY created_at DESC
+                )
+                SELECT DISTINCT 
+                    p.*,
+                    fr.relationship_type,
+                    fr.relation_type,
+                    pd.document_id,
+                    pd.document_type,
+                    pd.processed_status,
+                    pd.last_processed_at,
+                    pd.document_created_at
+                FROM profiles p
+                LEFT JOIN family_relations fr ON 
+                    (fr.parent_profile_id = ? AND fr.child_profile_id = p.id)
+                    OR (fr.child_profile_id = ? AND fr.parent_profile_id = p.id)
+                LEFT JOIN profile_documents pd ON pd.profile_id = p.id
+                WHERE p.id = ? 
+                   OR fr.parent_profile_id = ? 
+                   OR fr.child_profile_id = ?
+                ORDER BY p.id, pd.document_created_at DESC`,
+                [profileId, profileId, profileId, profileId, profileId]
+            );
+    
+            // Rest of the method remains the same
+            const membersMap = new Map();
+            rows.forEach(row => {
+                if (!membersMap.has(row.id)) {
+                    membersMap.set(row.id, {
+                        id: row.id,
+                        name: row.full_name,
+                        dateOfBirth: row.date_of_birth,
+                        gender: row.gender,
+                        bloodGroup: row.blood_group,
+                        relationshipType: row.relationship_type,
+                        relationType: row.relation_type,
+                        documents: [],
+                        profileType: row.profile_type,
+                        profileStatus: row.profile_status,
+                        emergencyContact: row.emergency_contact,
+                    });
+                }
+                
+                if (row.document_id) {
+                    const member = membersMap.get(row.id);
+                    if (!member.documents.some(d => d.id === row.document_id)) {
+                        member.documents.push({
+                            id: row.document_id,
+                            type: row.document_type,
+                            status: row.processed_status,
+                            lastProcessed: row.last_processed_at,
+                            createdAt: row.document_created_at
+                        });
+                    }
+                }
+            });
+    
+            return Array.from(membersMap.values());
+        } catch (error) {
+            console.error('Error in findFamilyMembers:', error);
+            throw error;
+        }
+    }
+
+    static async hasAccessPermission(requesterId, targetId, requiredLevel = 'read') {
+        try {
+            if (requesterId === targetId) return true;
+    
+            const [relations] = await db.query(
+                `SELECT relationship_type 
+                FROM family_relations 
+                WHERE (parent_profile_id = ? AND child_profile_id = ?)
+                OR (parent_profile_id = ? AND child_profile_id = ?)`,
+                [requesterId, targetId, targetId, requesterId]
+            );
+    
+            if (!relations.length) return false;
+    
+            const relationTypes = {
+                'father': ['read', 'write'],
+                'mother': ['read', 'write'],
+                'son': ['read'],
+                'daughter': ['read'],
+                'husband': ['read', 'write'],
+                'wife': ['read', 'write']
+            };
+    
+            const relationship = relations[0].relationship_type;
+            return relationTypes[relationship]?.includes(requiredLevel) || false;
+        } catch (error) {
+            console.error('Error in hasAccessPermission:', error);
+            throw error;
+        }
+    }
 }
 
 module.exports = Profile;

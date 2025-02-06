@@ -1,3 +1,5 @@
+// C:\Project\SMART_MED_2.0\server\models\Relationship.js
+
 const db = require('../config/database');
 
 class Relationship {

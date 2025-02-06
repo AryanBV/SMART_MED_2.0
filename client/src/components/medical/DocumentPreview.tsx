@@ -36,30 +36,42 @@ const DocumentPreview: React.FC<DocumentPreviewProps> = ({
   const token = localStorage.getItem('token');
 
   useEffect(() => {
-    const fetchData = async () => {
+    const fetchExtractedData = async () => {
       if (!document?.id || !isOpen) return;
       
       try {
         setLoading(true);
+        setError(null); // Reset error state
+  
+        // Add timeout and retry logic
         const data = await DocumentService.getExtractedData(document.id);
-        setMedicines(data || []);
+        
+        // Handle case when no medicines are found
+        if (!data?.medicines || data.medicines.length === 0) {
+          setError({
+            message: 'No medicines were detected in this document',
+            type: 'warning'
+          });
+        }
+  
+        setMedicines(data?.medicines || []);
       } catch (error) {
-        console.error('Error fetching extracted data:', error);
-        toast({
-          title: "Error",
-          description: "Failed to load document data",
-          variant: "destructive",
+        console.error('Document data fetch error:', error);
+        
+        // Set more descriptive error
+        setError({
+          message: error.message || 'Failed to load document data',
+          type: 'error'
         });
       } finally {
         setLoading(false);
       }
     };
-
+  
     if (isOpen) {
-      setIframeError(false);
-      fetchData();
+      fetchExtractedData();
     }
-  }, [document?.id, isOpen, toast]);
+  }, [document?.id, isOpen]);
 
   const handleRetryProcessing = async () => {
     if (!document?.id) return;

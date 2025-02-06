@@ -24,9 +24,31 @@ const getProfileById = async (id: string): Promise<Profile> => {
   return response.data;
 };
 
+const getFamilyProfiles = async (): Promise<Profile[]> => {
+  const response = await api.get<Profile[]>('/api/profiles/family');
+  return response.data;
+};
+
+const getFamilyMemberProfile = async (memberId: string): Promise<Profile> => {
+  const response = await api.get<Profile>(`/api/profiles/family/${memberId}`);
+  return response.data;
+};
+
+const linkFamilyMember = async (memberId: string, relationship: string): Promise<void> => {
+  await api.post(`/api/profiles/family/link`, { memberId, relationship });
+};
+
+const unlinkFamilyMember = async (memberId: string): Promise<void> => {
+  await api.post(`/api/profiles/family/unlink/${memberId}`);
+};
+
 export const ProfileService = {
   createProfile,
   updateProfile,
   getProfile,
   getProfileById,
+  getFamilyProfiles,
+  getFamilyMemberProfile,
+  linkFamilyMember,
+  unlinkFamilyMember
 };

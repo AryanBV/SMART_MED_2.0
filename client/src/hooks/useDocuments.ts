@@ -1,57 +1,123 @@
+// Path: C:\Project\SMART_MED_2.0\client\src\hooks\useDocuments.ts
+
 import { useState } from 'react';
-import axios from '@/config/axios';
+import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query';
+import { DocumentService } from '@/services/documents';
+import { useToast } from '@/components/ui/use-toast';
+import type { DocumentFilter, FamilyMemberDocument } from '@/interfaces/documentTypes';
 
-export const useDocuments = (profileId: string) => {
-  const [isLoading, setIsLoading] = useState(false);
+export const useDocuments = (profileId?: number) => {
+  const { toast } = useToast();
+  const queryClient = useQueryClient();
+  const [filters, setFilters] = useState<DocumentFilter>({});
 
-  const uploadDocument = async (file: File) => {
-    try {
-      setIsLoading(true);
-      const formData = new FormData();
-      formData.append('document', file);
+  // Query for fetching documents
+  const {
+    data: documents,
+    isLoading,
+    error,
+    refetch
+  } = useQuery({
+    queryKey: ['documents', profileId, filters],
+    queryFn: () => DocumentService.getDocuments(profileId, filters),
+    enabled: !!profileId
+  });
 
-      const response = await axios.post(
-        `/api/documents/upload/${profileId}`,
-        formData,
-        {
-          headers: {
-            'Content-Type': 'multipart/form-data',
-          },
-          onUploadProgress: (progressEvent) => {
-            const percentCompleted = Math.round(
-              (progressEvent.loaded * 100) / (progressEvent.total || 100)
-            );
-            // You can use this to update a progress bar
-            console.log(`Upload Progress: ${percentCompleted}%`);
-          },
-        }
-      );
-
-      return response.data;
-    } catch (error) {
-      console.error('Upload error:', error);
-      throw error;
-    } finally {
-      setIsLoading(false);
+  // Upload mutation
+  const uploadMutation = useMutation({
+    mutationFn: ({ 
+      file, 
+      documentType, 
+      targetProfileId 
+    }: { 
+      file: File; 
+      documentType: string; 
+      targetProfileId: number 
+    }) => DocumentService.uploadDocument(file, targetProfileId, documentType),
+    onSuccess: () => {
+      queryClient.invalidateQueries({ queryKey: ['documents', profileId] });
+      toast({
+        title: "Success",
+        description: "Document uploaded successfully",
+      });
+    },
+    onError: (error: any) => {
+      toast({
+        title: "Error",
+        description: error.response?.data?.message || "Failed to upload document",
+        variant: "destructive",
+      });
     }
-  };
+  });
 
-  const getDocuments = async () => {
-    try {
-      setIsLoading(true);
-      const response = await axios.get(`/api/documents/${profileId}`);
-      return response.data;
-    } catch (error) {
-      console.error('Failed to fetch documents:', error);
-      throw error;
-    } finally {
-      setIsLoading(false);
+  // Delete mutation
+  const deleteMutation = useMutation({
+    mutationFn: DocumentService.deleteDocument,
+    onSuccess: (_, documentId) => {
+      queryClient.invalidateQueries({ queryKey: ['documents', profileId] });
+      toast({
+        title: "Success",
+        description: "Document deleted successfully",
+      });
+    },
+    onError: (error: any) => {
+      toast({
+        title: "Error",
+        description: error.response?.data?.message || "Failed to delete document",
+        variant: "destructive",
+      });
     }
-  };
+  });
+
+  // Retry processing mutation
+  const retryProcessingMutation = useMutation({
+    mutationFn: DocumentService.retryProcessing,
+    onSuccess: () => {
+      queryClient.invalidateQueries({ queryKey: ['documents', profileId] });
+      toast({
+        title: "Success",
+        description: "Document processing restarted",
+      });
+    },
+    onError: (error: any) => {
+      toast({
+        title: "Error",
+        description: error.response?.data?.message || "Failed to retry processing",
+        variant: "destructive",
+      });
+    }
+  });
+
+  // Update access mutation
+  const updateAccessMutation = useMutation({
+    mutationFn: ({ id, access_level }: { id: number; access_level: string }) =>
+      DocumentService.updateDocumentAccess(id, access_level),
+    onSuccess: () => {
+      queryClient.invalidateQueries({ queryKey: ['documents', profileId] });
+      toast({
+        title: "Success",
+        description: "Document access updated successfully",
+      });
+    },
+    onError: (error: any) => {
+      toast({
+        title: "Error",
+        description: error.response?.data?.message || "Failed to update access",
+        variant: "destructive",
+      });
+    }
+  });
 
   return {
-    uploadDocument,
-    getDocuments,
+    documents: documents || [],
     isLoading,
+    error,
+    filters,
+    setFilters,
+    uploadDocument: uploadMutation.mutateAsync,
+    deleteDocument: deleteMutation.mutateAsync,
+    retryProcessing: retryProcessingMutation.mutateAsync,
+    updateAccess: updateAccessMutation.mutateAsync,
+    refetch
   };
 };

@@ -13,9 +13,20 @@ import DocumentsPage from '@/pages/DocumentsPage';
 import SettingsPage from '@/pages/SettingsPage';
 import { Toaster } from '@/components/ui/toaster';
 import OCRTestPage from '@/pages/OCRTestPage';
+import { QueryClient, QueryClientProvider } from '@tanstack/react-query';
 
+const queryClient = new QueryClient({
+  defaultOptions: {
+    queries: {
+      refetchOnWindowFocus: false,
+      retry: 1,
+      staleTime: 5 * 60 * 1000,
+    },
+  },
+});
 function App() {
   return (
+    <QueryClientProvider client={queryClient}>
     <AuthProvider>
       <Routes>
         {/* Public Routes */}
@@ -72,6 +83,7 @@ function App() {
       </Routes>
       <Toaster />
     </AuthProvider>
+    </QueryClientProvider>
   );
 }
 

@@ -16,6 +16,7 @@
     "noUnusedParameters": true,
     "noFallthroughCasesInSwitch": true,
     "baseUrl": ".",
+    "types": ["@radix-ui/react-tooltip"],
     "paths": {
       "@/*": ["./src/*"],
       "@components/*": ["src/components/*"],

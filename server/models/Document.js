@@ -16,8 +16,8 @@ class Document {
             FROM medical_documents d
             LEFT JOIN profiles p ON d.profile_id = p.id
             LEFT JOIN family_relations r ON (
-                (r.parent_id = ? AND r.child_id = d.profile_id)
-                OR (r.child_id = ? AND r.parent_id = d.profile_id)
+                (r.parent_profile_id = ? AND r.child_profile_id = d.profile_id)
+                OR (r.child_profile_id = ? AND r.parent_profile_id = d.profile_id)
             )
             WHERE d.profile_id = ?
                OR (r.relationship_type IS NOT NULL AND d.is_archived = false)
@@ -27,19 +27,25 @@ class Document {
         return rows;
     }
 
+
     static async create(documentData) {
         const [result] = await db.execute(
             `INSERT INTO medical_documents 
-            (profile_id, file_name, file_path, file_type, file_size, mime_type, document_type) 
-            VALUES (?, ?, ?, ?, ?, ?, ?)`,
+            (profile_id, owner_profile_id, original_owner_id, file_name, file_path, 
+             file_type, file_size, mime_type, document_type, access_level, uploaded_by)
+            VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)`,
             [
-                documentData.profileId,
+                documentData.profileId,         // The selected family member
+                documentData.ownerProfileId,    // The logged-in user's profile
+                documentData.ownerProfileId,    // Original owner (logged-in user)
                 documentData.fileName,
                 documentData.filePath,
                 documentData.fileType,
                 documentData.fileSize,
                 documentData.mimeType,
-                documentData.documentType
+                documentData.documentType,
+                'family',                       // Set default access level to family
+                documentData.ownerProfileId     // Uploaded by logged-in user
             ]
         );
         return result.insertId;
@@ -58,8 +64,8 @@ class Document {
             FROM medical_documents d
             LEFT JOIN profiles p ON d.profile_id = p.id
             LEFT JOIN family_relations r ON (
-                (r.parent_id = ? AND r.child_id = d.profile_id)
-                OR (r.child_id = ? AND r.parent_id = d.profile_id)
+                (r.parent_profile_id = ? AND r.child_profile_id = d.profile_id)
+                OR (r.child_profile_id = ? AND r.parent_profile_id = d.profile_id)
             )
             WHERE d.id = ? AND (
                 d.profile_id = ?
@@ -90,17 +96,18 @@ class Document {
         return result.affectedRows > 0;
     }
 
-    static async hasAccessPermission(documentId, profileId, requiredLevel = 'read') {
-        const document = await this.findById(documentId, profileId);
-        if (!document) return false;
-
-        const accessLevels = {
-            'read': ['read', 'write', 'admin'],
-            'write': ['write', 'admin'],
-            'admin': ['admin']
-        };
-
-        return accessLevels[requiredLevel].includes(document.access_level);
+    static async hasAccessPermission(targetProfileId, requestingProfileId) {
+        const [rows] = await db.execute(`
+            SELECT 1 
+            FROM profiles p
+            LEFT JOIN family_relations fr ON 
+                (fr.parent_profile_id = ? AND fr.child_profile_id = ?)
+                OR (fr.child_profile_id = ? AND fr.parent_profile_id = ?)
+            WHERE p.id = ?
+            LIMIT 1`,
+            [requestingProfileId, targetProfileId, requestingProfileId, targetProfileId, targetProfileId]
+        );
+        return rows.length > 0;
     }
 }
 

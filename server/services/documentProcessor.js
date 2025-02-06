@@ -5,158 +5,247 @@ const sharp = require('sharp');
 const path = require('path');
 const fs = require('fs').promises;
 const { DocumentProcessingError } = require('../middleware/errorHandler');
-const pdfjsLib = require('./pdfConfig'); // Updated import
+const pdfjsLib = require('./pdfConfig');
 const medicineReferenceData = require('../../database/medicine-dataset/medicines.json');
+const db = require('../config/database');
 
 class DocumentProcessor {
-  constructor() {
-    this.worker = null;
-    this.medicineReference = medicineReferenceData.medicines;
-  }
+    constructor() {
+        this.worker = null;
+        this.medicineReference = medicineReferenceData.medicines;
+        this.ocrConfig = {
+            workerPath: 'eng.traineddata',
+            logger: m => console.log(m),
+            errorHandler: err => console.error('OCR Error:', err)
+        };
+    }
 
-  async initialize() {
-    try {
-        if (!this.worker) {
-            console.log('Initializing Tesseract worker');
-            this.worker = await Tesseract.createWorker({
-                logger: progress => {
-                    console.log('Tesseract progress:', progress);
-                },
-                loadAuto: true // Add this line
-            });
-            await this.worker.loadLanguage('eng');
-            await this.worker.initialize('eng');
-            console.log('Tesseract worker initialized successfully');
+    async initialize() {
+        try {
+            if (!this.worker) {
+                console.log('Initializing Tesseract worker');
+                this.worker = await Tesseract.createWorker({
+                    logger: progress => {
+                        console.log('Tesseract progress:', progress);
+                    },
+                    loadAuto: true
+                });
+                await this.worker.loadLanguage('eng');
+                await this.worker.initialize('eng');
+                console.log('Tesseract worker initialized successfully');
+            }
+        } catch (error) {
+            console.error('Tesseract initialization error:', error);
+            throw new DocumentProcessingError('Failed to initialize OCR processor');
         }
-    } catch (error) {
-        console.error('Tesseract initialization error:', error);
-        throw new DocumentProcessingError('Failed to initialize OCR processor');
     }
-  }
 
-  async processDocument(filePath) {
-    try {
-      console.log('Processing document:', filePath);
-      const ext = path.extname(filePath).toLowerCase();
-      
-      // Initialize PDF.js worker
-      if (ext === '.pdf') {
-        console.log('Setting up PDF.js worker');
-        pdfjsLib.GlobalWorkerOptions.workerSrc = path.resolve(require.resolve('pdfjs-dist/build/pdf.worker.js'));
+    async processDocument(filePath, documentId) {
+        const connection = await db.getConnection();
+        try {
+            console.log('Starting document processing:', documentId);
+            await connection.beginTransaction();
+    
+            // Update initial status
+            await this.updateProcessingStatus(connection, documentId, 'processing');
+    
+            // Extract text based on file type
+            const ext = path.extname(filePath).toLowerCase();
+            const extractedText = ext === '.pdf' 
+                ? await this.processPDF(filePath)
+                : await this.processImage(filePath);
+    
+            console.log('Text extraction completed');
+    
+            // Get document info and profile
+            const [documentInfo] = await connection.execute(
+                'SELECT profile_id FROM medical_documents WHERE id = ?',
+                [documentId]
+            );
+            const profileId = documentInfo[0].profile_id;
+    
+            // Extract all information
+            const patientInfo = await this.extractPatientInfo(extractedText);
+            const vitals = await this.extractVitals(extractedText);
+            const medicines = await this.extractMedicineInfo(extractedText, documentId);
+            const appointmentInfo = await this.extractAppointmentInfo(extractedText);
+    
+            // Save all extracted information
+            if (vitals) {
+                await connection.execute(
+                    `UPDATE profiles 
+                     SET blood_pressure = ?,
+                         blood_glucose = ?,
+                         hba1c = ?,
+                         updated_at = CURRENT_TIMESTAMP
+                     WHERE id = ?`,
+                    [vitals.blood_pressure, vitals.blood_glucose, vitals.hba1c, profileId]
+                );
+            }
+    
+            // Update document with all extracted data
+            await connection.execute(
+                `UPDATE medical_documents 
+                 SET processed_status = 'completed',
+                     ocr_text = ?,
+                     metadata = ?,
+                     last_processed_at = CURRENT_TIMESTAMP
+                 WHERE id = ?`,
+                [
+                    extractedText,
+                    JSON.stringify({
+                        patientInfo,
+                        vitals,
+                        appointmentInfo,
+                        medicineCount: medicines.length
+                    }),
+                    documentId
+                ]
+            );
+    
+            await connection.commit();
+            console.log('Document processing completed successfully');
+    
+            return {
+                success: true,
+                data: {
+                    patientInfo,
+                    vitals,
+                    medicines,
+                    appointmentInfo,
+                    rawText: extractedText
+                }
+            };
+    
+        } catch (error) {
+            await connection.rollback();
+            console.error('Document processing error:', error);
+            await this.updateProcessingStatus(connection, documentId, 'failed', error.message);
+            throw error;
+        } finally {
+            connection.release();
+        }
+    } 
+
+    async processImage(filePath) {
+      try {
+          await this.initialize();
+          const result = await this.worker.recognize(filePath);
+          return result.data.text;
+      } catch (error) {
+          console.error('Image processing error:', error);
+          throw new DocumentProcessingError('Failed to process image document');
       }
-      
-      if (ext === '.pdf') {
-        console.log('Processing PDF document');
-        return await this.processPDF(filePath);
-      } else {
-        console.log('Processing image document');
-        return await this.processImage(filePath);
-      }
-    } catch (error) {
-      console.error('Document processing error:', error);
-      throw new DocumentProcessingError(`Failed to process document: ${error.message}`);
-    }
   }
-
-  async processImage(filePath) {
-    try {
-      console.log('Processing image:', filePath);
-      const optimizedPath = path.join(
-        path.dirname(filePath),
-        `optimized-${path.basename(filePath)}`
-      );
-
-      console.log('Optimizing image...');
-      await sharp(filePath)
-        .greyscale()
-        .normalize()
-        .resize(2000, 2000, {
-          fit: 'inside',
-          withoutEnlargement: true
-        })
-        .toFile(optimizedPath);
-
-      console.log('Image optimized, performing OCR...');
-      await this.initialize();
-      const { data: { text } } = await this.worker.recognize(optimizedPath);
-      
-      console.log('OCR completed, cleaning up...');
-      await fs.unlink(optimizedPath);
-
-      return text;
-    } catch (error) {
-      console.error('Image processing error:', error);
-      throw new DocumentProcessingError(`Failed to process image: ${error.message}`);
-    }
-  }
-
-  async processPDF(pdfPath) {
-    try {
-      console.log('Reading PDF file:', pdfPath);
-      const dataBuffer = await fs.readFile(pdfPath);
-      
-      console.log('Loading PDF document');
-      const doc = await pdfjsLib.getDocument({data: dataBuffer}).promise;
-      console.log(`PDF loaded successfully. Pages: ${doc.numPages}`);
-      
-      let fullText = '';
-      
-      for (let i = 1; i <= doc.numPages; i++) {
-        console.log(`Processing page ${i}/${doc.numPages}`);
-        const page = await doc.getPage(i);
-        const content = await page.getTextContent();
-        const text = content.items.map(item => item.str).join(' ');
-        fullText += text + '\n';
-      }
-
-      console.log('PDF text extraction completed');
-      return fullText;
-    } catch (error) {
-      console.error('PDF processing error:', error);
-      throw new DocumentProcessingError(`Failed to process PDF: ${error.message}`);
-    }
-  }
-
-  async extractMedicineInfo(text) {
-    try {
-      console.log('Starting medicine extraction from text');
-      const medicines = [];
-      const lines = text.split('\n');
-      let currentMedicine = null;
   
-      for (const line of lines) {
-        const medicineName = this.findMedicineNameInLine(line);
-        if (medicineName) {
-          console.log('Found medicine:', medicineName.name);
-          if (currentMedicine) {
-            medicines.push(currentMedicine);
+  async processPDF(filePath) {
+      try {
+          const data = await fs.readFile(filePath);
+          const pdf = await pdfjsLib.getDocument(data).promise;
+          let completeText = '';
+  
+          for (let i = 1; i <= pdf.numPages; i++) {
+              const page = await pdf.getPage(i);
+              const textContent = await page.getTextContent();
+              const pageText = textContent.items.map(item => item.str).join(' ');
+              completeText += pageText + '\n';
           }
-          currentMedicine = {
-            medicine_name: medicineName.name,
-            generic_name: medicineName.genericName,
-            category: medicineName.category,
-            dosage: this.extractDosage(line),
-            frequency: this.extractFrequency(line),
-            duration: this.extractDuration(line),
-            instructions: [],
-            confidence_score: medicineName.confidence
-          };
-        } else if (currentMedicine && this.isInstructionLine(line)) {
-          currentMedicine.instructions.push(line.trim());
+  
+          return completeText;
+      } catch (error) {
+          console.error('PDF processing error:', error);
+          throw new DocumentProcessingError('Failed to process PDF document');
+      }
+  }
+
+  async extractMedicineInfo(text, documentId) {
+    const connection = await db.getConnection();
+    try {
+        console.log('Starting medicine extraction from text');
+        const medicines = [];
+        
+        // Extract prescription section
+        const prescriptionMatch = text.match(/PRESCRIPTION:[\s\S]*?(?=VITALS:|$)/i);
+        if (!prescriptionMatch) {
+            console.log('No prescription section found');
+            return [];
         }
-      }
-  
-      if (currentMedicine) {
-        medicines.push(currentMedicine);
-      }
-  
-      console.log(`Extraction completed. Found ${medicines.length} medicines`);
-      return medicines;
+
+        const prescriptionText = prescriptionMatch[0];
+        const medicationEntries = prescriptionText.split(/\d+\./g).filter(entry => entry.trim());
+
+        for (const entry of medicationEntries) {
+            const medicineMatch = entry.match(/([A-Za-z\s]+(?:\s*\([A-Za-z\s]+\))?)\s*(\d+(?:\.\d+)?\s*(?:mg|g|mcg|IU|units\/mL))/i);
+            if (!medicineMatch) continue;
+
+            const medicineName = medicineMatch[1].trim();
+            const dosage = medicineMatch[2];
+
+            // Find medicine in reference data
+            const medicineInfo = this.findMedicineNameInLine(medicineName);
+            if (!medicineInfo) continue;
+
+            // Extract Sig (instructions)
+            const sigMatch = entry.match(/Sig:\s*([^\n]+)/i);
+            const dispMatch = entry.match(/Disp:\s*([^\n]+)/i);
+            const refillsMatch = entry.match(/Refills:\s*(\d+)/i);
+
+            const medicine = {
+                medicine_name: medicineInfo.name,
+                generic_name: medicineInfo.genericName,
+                medicine_category: medicineInfo.category,
+                dosage: dosage,
+                frequency: sigMatch ? sigMatch[1].trim() : null,
+                duration: this.extractDuration(entry),
+                instructions: [
+                    sigMatch ? sigMatch[1].trim() : '',
+                    dispMatch ? `Dispense: ${dispMatch[1].trim()}` : '',
+                    refillsMatch ? `Refills: ${refillsMatch[1]}` : ''
+                ].filter(Boolean),
+                confidence_score: medicineInfo.confidence,
+                status: 'active',
+                start_date: new Date()
+            };
+
+            await this.saveMedicineToDatabase(connection, medicine, documentId);
+            medicines.push(medicine);
+        }
+
+        await connection.commit();
+        return medicines;
+
     } catch (error) {
-      console.error('Medicine extraction error:', error);
-      throw new DocumentProcessingError('Failed to extract medicines');
+        await connection.rollback();
+        console.error('Medicine extraction error:', error);
+        throw new DocumentProcessingError('Failed to extract medicines');
+    } finally {
+        connection.release();
     }
   }
+
+    async saveMedicineToDatabase(connection, medicine, documentId) {
+        const [result] = await connection.execute(
+            `INSERT INTO extracted_medicines 
+            (document_id, medicine_name, generic_name, medicine_category,
+             dosage, frequency, duration, instructions, confidence_score,
+             status, start_date)
+            VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)`,
+            [
+                documentId,
+                medicine.medicine_name,
+                medicine.generic_name,
+                medicine.medicine_category,
+                medicine.dosage,
+                medicine.frequency,
+                medicine.duration,
+                medicine.instructions.join('\n'),
+                medicine.confidence_score,
+                medicine.status,
+                medicine.start_date
+            ]
+        );
+        return result.insertId;
+    }
 
   findMedicineNameInLine(line) {
     for (const medicine of this.medicineReference) {
@@ -264,18 +353,199 @@ class DocumentProcessor {
 
   async cleanup() {
     try {
-      const tempDir = path.join(__dirname, '../../uploads/temp');
-      console.log('Cleaning up temp directory:', tempDir);
-      const files = await fs.readdir(tempDir);
-      
-      for (const file of files) {
-        await fs.unlink(path.join(tempDir, file));
-      }
-      console.log('Cleanup completed successfully');
+        const tempDir = path.join(__dirname, '../../uploads/temp');
+        console.log('Cleaning up temp directory:', tempDir);
+        const files = await fs.readdir(tempDir);
+        
+        for (const file of files) {
+            await fs.unlink(path.join(tempDir, file));
+        }
+        console.log('Cleanup completed successfully');
+
+        // Also terminate Tesseract worker
+        await this.terminate();
     } catch (error) {
-      console.error('Cleanup error:', error);
+        console.error('Cleanup error:', error);
     }
+}
+
+async extractVitals(text) {
+  try {
+      const vitalsMatch = text.match(/VITALS:[\s\S]*?(?=SPECIAL INSTRUCTIONS:|$)/i);
+      if (!vitalsMatch) return null;
+
+      const vitalsText = vitalsMatch[0];
+      
+      return {
+          blood_pressure: vitalsText.match(/Blood Pressure\s*:\s*([^\n]*)/i)?.[1]?.trim(),
+          blood_glucose: vitalsText.match(/(?:Fasting )?Blood Glucose\s*:\s*([^\n]*)/i)?.[1]?.trim(),
+          hba1c: vitalsText.match(/HbA1c\s*:\s*([^\n]*)/i)?.[1]?.trim()
+      };
+  } catch (error) {
+      console.error('Vitals extraction error:', error);
+      return null;
   }
+}
+
+async extractAppointmentInfo(text) {
+  try {
+      const appointmentMatch = text.match(/Next Appointment:\s*([^\n]*)/i);
+      if (!appointmentMatch) return null;
+
+      const appointmentDate = appointmentMatch[1].trim();
+      return {
+          date: appointmentDate,
+          timestamp: new Date(appointmentDate).toISOString()
+      };
+  } catch (error) {
+      console.error('Appointment extraction error:', error);
+      return null;
+  }
+}
+
+async extractPatientInfo(text) {
+  try {
+      const patientInfoMatch = text.match(/PATIENT INFORMATION:[\s\S]*?(?=PRESCRIPTION:|$)/i);
+      if (!patientInfoMatch) return null;
+
+      const patientText = patientInfoMatch[0];
+      
+      return {
+          name: patientText.match(/Name\s*:\s*([^\n]*)/i)?.[1]?.trim(),
+          age: patientText.match(/Age\s*:\s*([^\n]*)/i)?.[1]?.trim(),
+          gender: patientText.match(/Gender\s*:\s*([^\n]*)/i)?.[1]?.trim(),
+          blood_group: patientText.match(/Blood Group\s*:\s*([^\n]*)/i)?.[1]?.trim(),
+          patient_id: patientText.match(/Patient ID\s*:\s*([^\n]*)/i)?.[1]?.trim(),
+          weight: patientText.match(/Weight\s*:\s*([^\n]*)/i)?.[1]?.trim()
+      };
+  } catch (error) {
+      console.error('Patient info extraction error:', error);
+      return null;
+  }
+}
+
+async saveVitalsToDatabase(connection, vitals, profileId) {
+  if (!vitals) return;
+
+  try {
+      await connection.execute(
+          `UPDATE profiles 
+           SET blood_pressure = ?,
+               blood_glucose = ?,
+               hba1c = ?,
+               updated_at = CURRENT_TIMESTAMP
+           WHERE id = ?`,
+          [vitals.blood_pressure, vitals.blood_glucose, vitals.hba1c, profileId]
+      );
+  } catch (error) {
+      console.error('Error saving vitals:', error);
+      throw error;
+  }
+}
+
+async processDocument(filePath, documentId) {
+  const connection = await db.getConnection();
+  try {
+      console.log('Starting document processing:', documentId);
+      await connection.beginTransaction();
+
+      // Update initial status
+      await this.updateProcessingStatus(connection, documentId, 'processing');
+
+      // Get file type and process accordingly
+      const ext = path.extname(filePath).toLowerCase();
+      const extractedText = ext === '.pdf' 
+          ? await this.processPDF(filePath)
+          : await this.processImage(filePath);
+
+      console.log('Text extraction completed');
+
+      // Extract all information
+      const [documentInfo] = await connection.execute(
+          'SELECT profile_id FROM medical_documents WHERE id = ?',
+          [documentId]
+      );
+
+      const profileId = documentInfo[0].profile_id;
+
+      // Extract and save all information
+      const patientInfo = await this.extractPatientInfo(extractedText);
+      const vitals = await this.extractVitals(extractedText);
+      const medicines = await this.extractMedicineInfo(extractedText, documentId);
+      const appointmentInfo = await this.extractAppointmentInfo(extractedText);
+
+      // Save vitals to profile
+      if (vitals) {
+          await connection.execute(
+              `UPDATE profiles 
+               SET blood_pressure = ?,
+                   blood_glucose = ?,
+                   hba1c = ?,
+                   updated_at = CURRENT_TIMESTAMP
+               WHERE id = ?`,
+              [vitals.blood_pressure, vitals.blood_glucose, vitals.hba1c, profileId]
+          );
+      }
+
+      // Update document with extracted data
+      await connection.execute(
+          `UPDATE medical_documents 
+           SET processed_status = 'completed',
+               ocr_text = ?,
+               metadata = ?,
+               last_processed_at = CURRENT_TIMESTAMP
+           WHERE id = ?`,
+          [
+              extractedText,
+              JSON.stringify({
+                  patientInfo,
+                  vitals,
+                  appointmentInfo,
+                  medicineCount: medicines.length
+              }),
+              documentId
+          ]
+      );
+
+      await connection.commit();
+      console.log('Document processing completed successfully');
+
+      return {
+          success: true,
+          data: {
+              patientInfo,
+              vitals,
+              medicines,
+              appointmentInfo
+          }
+      };
+
+  } catch (error) {
+      await connection.rollback();
+      console.error('Document processing error:', error);
+      await this.updateProcessingStatus(connection, documentId, 'failed', error.message);
+      throw error;
+  } finally {
+      connection.release();
+  }
+}
+
+async updateProcessingStatus(connection, documentId, status, errorMessage = null) {
+  try {
+      await connection.execute(
+          `UPDATE medical_documents 
+           SET processed_status = ?,
+               processing_error = ?,
+               last_processed_at = CURRENT_TIMESTAMP
+           WHERE id = ?`,
+          [status, errorMessage, documentId]
+      );
+  } catch (error) {
+      console.error('Error updating processing status:', error);
+      throw error;
+  }
+}
+
 }
 
 module.exports = new DocumentProcessor();

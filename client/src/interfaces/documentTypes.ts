@@ -1,21 +1,24 @@
+// Path: C:\Project\SMART_MED_2.0\client\src\interfaces\documentTypes.ts
+
 import { Document } from './document';
 
-// Extended document interface with family context
+// Keep existing FamilyMemberDocument interface but enhance it
 export interface FamilyMemberDocument extends Document {
   owner_name: string;
   relationship?: string;
   access_level: 'admin' | 'write' | 'read';
 }
 
-// Document filter types
+// Update DocumentFilter with more options
 export interface DocumentFilter {
   profileId?: number;
   documentType?: 'prescription' | 'lab_report' | 'discharge_summary' | 'other' | 'all';
+  processingStatus?: 'pending' | 'processing' | 'completed' | 'failed' | 'all';
   startDate?: Date;
   endDate?: Date;
 }
 
-// Medicine extraction types
+// Keep existing ExtractedMedicine interface
 export interface ExtractedMedicine {
   id: number;
   document_id: number;
@@ -28,14 +31,14 @@ export interface ExtractedMedicine {
   created_at: string;
 }
 
-// Document processing status
+// Keep existing ProcessingStatus interface
 export interface ProcessingStatus {
   status: 'pending' | 'processing' | 'completed' | 'failed';
   progress: number;
   message?: string;
 }
 
-// Document upload response
+// Update DocumentUploadResponse with more details
 export interface DocumentUploadResponse {
   message: string;
   document: FamilyMemberDocument;
@@ -45,16 +48,46 @@ export interface DocumentUploadResponse {
   };
 }
 
-// Document access permissions
-export interface DocumentAccess {
+// Add new interfaces
+export interface DocumentAccessPermissions {
   canView: boolean;
   canEdit: boolean;
   canDelete: boolean;
   canShare: boolean;
 }
 
+export interface DocumentViewProps {
+  document: FamilyMemberDocument;
+  onClose: () => void;
+}
+
+// Keep existing DocumentUploadProps
 export interface DocumentUploadProps {
   onUploadComplete: (file: File, documentType: string) => Promise<void>;
   onProgress: (progress: number) => void;
   uploadProgress: number;
+}
+
+export interface ExtractedDocumentData {
+  patientInfo: {
+    name: string;
+    age: string;
+    gender: string;
+    bloodGroup: string;
+    weight: string;
+  };
+  vitals: {
+    bloodPressure: string;
+    bloodGlucose: string;
+    hba1c: string;
+  };
+  medicines: Array<{
+    medicine_name: string;
+    dosage: string;
+    frequency: string;
+    duration?: string;
+    instructions?: string;
+    refills?: number;
+  }>;
+  nextAppointment?: string;
 }

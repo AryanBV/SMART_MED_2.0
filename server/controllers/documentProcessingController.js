@@ -10,83 +10,84 @@ const fs = require('fs').promises;  // Add this at the top
 class DocumentProcessingController {
   async processDocument(req, res, next) {
     const connection = await db.getConnection();
-    
     try {
-      const { id } = req.params;
-      const profileId = req.user.profileId;
+        const { id } = req.params;
+        const profileId = req.user.profileId;
 
-      // Verify document access
-      const [documents] = await connection.execute(
-        `SELECT * FROM medical_documents 
-         WHERE id = ? AND (profile_id = ? OR EXISTS (
-           SELECT 1 FROM family_relations 
-           WHERE (parent_profile_id = ? AND child_profile_id = profile_id)
-           OR (child_profile_id = ? AND parent_profile_id = profile_id)
-         ))`,
-        [id, profileId, profileId, profileId]
-      );
+        await connection.beginTransaction();
 
-      if (!documents.length) {
-        throw new DocumentProcessingError('Document not found or access denied');
-      }
-
-      const document = documents[0];
-
-      await connection.beginTransaction();
-
-      // Update processing status
-      await connection.execute(
-        `UPDATE medical_documents 
-         SET processed_status = 'processing', 
-             processing_attempts = processing_attempts + 1,
-             last_processed_at = CURRENT_TIMESTAMP 
-         WHERE id = ?`,
-        [id]
-      );
-
-      // Process document
-      const extractedText = await documentProcessor.processImage(document.file_path);
-      const medicines = await documentProcessor.extractMedicineInfo(extractedText);
-
-      // Clear existing extracted medicines
-      await connection.execute(
-        'DELETE FROM extracted_medicines WHERE document_id = ?',
-        [id]
-      );
-
-      // Save extracted medicines
-      for (const medicine of medicines) {
-        await connection.execute(
-          `INSERT INTO extracted_medicines 
-           (document_id, medicine_name, confidence_score, raw_text) 
-           VALUES (?, ?, ?, ?)`,
-          [id, medicine.medicine_name, medicine.confidence_score, medicine.raw_text]
+        // Get document
+        const [documents] = await connection.execute(
+            `SELECT md.*, p.full_name as owner_name 
+             FROM medical_documents md
+             JOIN profiles p ON md.profile_id = p.id
+             WHERE md.id = ?`,
+            [id]
         );
-      }
 
-      // Update processing status
-      await connection.execute(
-        `UPDATE medical_documents 
-         SET processed_status = 'completed', 
-             last_processed_at = CURRENT_TIMESTAMP 
-         WHERE id = ?`,
-        [id]
-      );
-
-      await connection.commit();
-
-      res.json({
-        message: 'Document processed successfully',
-        extractedData: {
-          medicines,
-          rawText: extractedText
+        if (!documents.length) {
+            throw new DocumentProcessingError('Document not found');
         }
-      });
+
+        const document = documents[0];
+        
+        // Process document and extract all data
+        const extractedText = await documentProcessor.processDocument(document.file_path, id);
+        const medicines = await documentProcessor.extractMedicineInfo(extractedText, id);
+        const vitals = await documentProcessor.extractVitals(extractedText);
+        const patientInfo = await documentProcessor.extractPatientInfo(extractedText);
+        const appointmentInfo = await documentProcessor.extractAppointmentInfo(extractedText);
+
+        // Save vitals to profile
+        if (vitals) {
+            await connection.execute(
+                `UPDATE profiles 
+                 SET blood_pressure = ?,
+                     blood_glucose = ?,
+                     hba1c = ?,
+                     updated_at = CURRENT_TIMESTAMP
+                 WHERE id = ?`,
+                [vitals.blood_pressure, vitals.blood_glucose, vitals.hba1c, profileId]
+            );
+        }
+
+        // Update document status
+        await connection.execute(
+            `UPDATE medical_documents 
+             SET processed_status = 'completed',
+                 ocr_text = ?,
+                 metadata = ?,
+                 last_processed_at = CURRENT_TIMESTAMP
+             WHERE id = ?`,
+            [
+                extractedText,
+                JSON.stringify({
+                    patientInfo,
+                    vitals,
+                    appointmentInfo,
+                    medicineCount: medicines.length
+                }),
+                id
+            ]
+        );
+
+        await connection.commit();
+
+        res.json({
+            success: true,
+            data: {
+                patientInfo,
+                vitals,
+                medicines,
+                appointmentInfo
+            }
+        });
+
     } catch (error) {
-      await connection.rollback();
-      next(error);
+        await connection.rollback();
+        next(error);
     } finally {
-      connection.release();
+        connection.release();
     }
   }
 

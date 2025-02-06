@@ -1,88 +1,82 @@
-// Path: /client/src/hooks/useFamilyDocuments.ts
+// Path: C:\Project\SMART_MED_2.0\client\src\hooks\useFamilyDocuments.ts
 
-import { useState, useEffect } from 'react';
+import { useState } from 'react';
 import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query';
 import { DocumentService } from '@/services/documents';
-import { FamilyMemberDocument } from '@/interfaces/documentTypes';
 import { useToast } from '@/components/ui/use-toast';
+import type { DocumentFilter, FamilyMemberDocument } from '@/interfaces/documentTypes';
 
-export const useFamilyDocuments = (profileId: number | null) => {
+export const useFamilyDocuments = (familyProfileId: number | null) => {
   const { toast } = useToast();
   const queryClient = useQueryClient();
+  const [filters, setFilters] = useState<DocumentFilter>({});
 
+  // Query for fetching family documents
   const {
     data: documents,
     isLoading,
     error,
     refetch
   } = useQuery({
-    queryKey: ['documents', profileId],
-    queryFn: () => profileId ? DocumentService.getDocuments(profileId) : Promise.resolve([]),
-    enabled: !!profileId
+    queryKey: ['familyDocuments', familyProfileId, filters],
+    queryFn: () => familyProfileId ? 
+      DocumentService.getFamilyDocuments(familyProfileId) : 
+      Promise.resolve([]),
+    enabled: !!familyProfileId
   });
 
-  const uploadMutation = useMutation({
-    mutationFn: ({ file, profileId }: { file: File; profileId: number }) =>
-      DocumentService.uploadDocument(file, profileId),
+  // Share document mutation
+  const shareMutation = useMutation({
+    mutationFn: ({ documentId, profileIds }: { documentId: number; profileIds: number[] }) =>
+      DocumentService.shareDocument(documentId, profileIds),
     onSuccess: () => {
-      queryClient.invalidateQueries({ queryKey: ['documents', profileId] });
+      queryClient.invalidateQueries({ queryKey: ['familyDocuments', familyProfileId] });
       toast({
         title: "Success",
-        description: "Document uploaded successfully",
+        description: "Document shared successfully",
       });
     },
     onError: (error: any) => {
       toast({
         title: "Error",
-        description: error.response?.data?.message || "Failed to upload document",
+        description: error.response?.data?.message || "Failed to share document",
         variant: "destructive",
       });
     }
   });
 
-  const deleteMutation = useMutation({
-    mutationFn: DocumentService.deleteDocument,
-    onSuccess: () => {
-      queryClient.invalidateQueries({ queryKey: ['documents', profileId] });
-      toast({
-        title: "Success",
-        description: "Document deleted successfully",
-      });
-    },
-    onError: (error: any) => {
-      toast({
-        title: "Error",
-        description: error.response?.data?.message || "Failed to delete document",
-        variant: "destructive",
-      });
-    }
+  // Get shared documents query
+  const {
+    data: sharedDocuments,
+    isLoading: isLoadingShared,
+    error: sharedError
+  } = useQuery({
+    queryKey: ['sharedDocuments'],
+    queryFn: () => DocumentService.getSharedDocuments(),
   });
 
-  const retryProcessingMutation = useMutation({
-    mutationFn: DocumentService.retryProcessing,
-    onSuccess: () => {
-      queryClient.invalidateQueries({ queryKey: ['documents', profileId] });
-      toast({
-        title: "Success",
-        description: "Document reprocessed successfully",
-      });
-    },
-    onError: (error: any) => {
-      toast({
-        title: "Error",
-        description: error.response?.data?.message || "Failed to reprocess document",
-        variant: "destructive",
-      });
-    }
-  });
+  const applyFilters = (documents: FamilyMemberDocument[]) => {
+    return documents?.filter(doc => {
+      if (filters.familyProfileId && doc.profileId !== Number(filters.familyProfileId)) return false;
+      if (filters.documentType && filters.documentType !== 'all') {
+        if (doc.document_type !== filters.documentType) return false;
+      }
+      if (filters.processingStatus && filters.processingStatus !== 'all') {
+        if (doc.processed_status !== filters.processingStatus) return false;
+      }
+      // Add more filters as needed
+      return true;
+    });
+  };
 
   return {
-    documents: documents || [],
-    isLoading,
-    error,
-    uploadDocument: uploadMutation.mutateAsync,
-    deleteDocument: deleteMutation.mutateAsync,
-    retryProcessing: retryProcessingMutation.mutateAsync,
-    refetch
+    documents: applyFilters(documents || []),
+    sharedDocuments: applyFilters(sharedDocuments || []),
+    isLoading: isLoading || isLoadingShared,
+    error: error || sharedError,
+    filters,
+    setFilters,
+    shareDocument: shareMutation.mutateAsync,
+    refetch,
   };
 };

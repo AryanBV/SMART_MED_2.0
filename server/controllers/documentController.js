@@ -4,103 +4,73 @@ const { DocumentProcessingError } = require('../middleware/errorHandler');
 const db = require('../config/database');
 const documentProcessor = require('../services/documentProcessor');
 const fs = require('fs').promises;
+const Document = require('../models/Document');
 
 class DocumentController {
     async uploadDocument(req, res, next) {
-        
+        const connection = await db.getConnection();
         
         try {
-            console.log('Upload request received:', {
-                file: {
-                    originalname: req.file.originalname,
-                    mimetype: req.file.mimetype,
-                    size: req.file.size,
-                    path: req.file.path
-                },
-                body: req.body,
-                user: {
-                    profileId: req.user.profileId,
-                    role: req.user.role
-                }
-            });
-
             if (!req.file) {
                 throw new DocumentProcessingError('No file uploaded');
             }
-
-            const { file } = req;
-            const profileId = req.user.profileId;
-
-            const connection = await db.getConnection();
+    
+            const targetProfileId = parseInt(req.body.profileId);
+            const ownerProfileId = req.user.profileId;
+    
+            if (!targetProfileId) {
+                throw new DocumentProcessingError('Invalid profile ID');
+            }
+    
             await connection.beginTransaction();
-
+    
             try {
-                // Save document record
+                // Create document record with correct access_level ENUM value
                 const [result] = await connection.execute(
                     `INSERT INTO medical_documents 
-                    (profile_id, file_name, file_path, file_type, file_size, mime_type, document_type) 
-                    VALUES (?, ?, ?, ?, ?, ?, ?)`,
+                    (profile_id, owner_profile_id, original_owner_id, file_name, 
+                     file_path, file_type, file_size, mime_type, document_type, 
+                     uploaded_by, access_level, processed_status)
+                    VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)`,
                     [
-                        profileId,
-                        file.originalname,
-                        file.path,
-                        path.extname(file.originalname),
-                        file.size,
-                        file.mimetype,
-                        req.body.documentType || 'other' // Use passed documentType
+                        targetProfileId,
+                        ownerProfileId,
+                        ownerProfileId,
+                        req.file.originalname,
+                        req.file.path,
+                        path.extname(req.file.originalname),
+                        req.file.size,
+                        req.file.mimetype,
+                        req.body.documentType || 'other',
+                        ownerProfileId,
+                        'family',  // Using valid ENUM value: 'private', 'family', or 'shared'
+                        'pending'
                     ]
                 );
-
+    
                 const documentId = result.insertId;
-
-                // Process document and extract text
-                const extractedText = await documentProcessor.processDocument(file.path);
-                
-                // Extract medicines from text using documentProcessor
-                const medicines = await documentProcessor.extractMedicineInfo(extractedText);
-
-                // Save extracted medicines
-                for (const medicine of medicines) {
-                    await connection.execute(
-                        `INSERT INTO extracted_medicines 
-                        (document_id, medicine_name, confidence_score) 
-                        VALUES (?, ?, ?)`,
-                        [documentId, medicine.medicine_name, medicine.confidence_score]
-                    );
-                }
-
-                // Update document status
-                await connection.execute(
-                    `UPDATE medical_documents 
-                     SET processed_status = 'completed', 
-                         last_processed_at = CURRENT_TIMESTAMP 
-                     WHERE id = ?`,
-                    [documentId]
-                );
-
+    
                 await connection.commit();
-
+    
                 res.status(200).json({
-                    message: 'Document uploaded and processed successfully',
+                    message: 'Document uploaded successfully',
                     document: {
                         id: documentId,
-                        filename: file.originalname,
-                        extractedMedicines: medicines
+                        filename: req.file.originalname,
+                        status: 'pending'
                     }
                 });
+    
             } catch (error) {
                 await connection.rollback();
                 throw error;
-            } finally {
-                connection.release();
             }
+    
         } catch (error) {
-            console.error('Upload error details:', {
-                message: error.message,
-                stack: error.stack,
-                name: error.name
-            });
+            console.error('Upload error:', error);
             next(error);
+        } finally {
+            connection.release();
         }
     }
 
@@ -131,33 +101,20 @@ class DocumentController {
         }
     }
 
-    async getDocument(req, res, next) {
+    async getDocuments(req, res, next) {
         try {
-            const { id } = req.params;
-            const profileId = req.user.profileId;
-            
+            const profileId = req.query.profileId || req.user.profileId;
             const [documents] = await db.execute(
                 `SELECT d.*, p.full_name as owner_name,
-                    CASE 
-                        WHEN d.profile_id = ? THEN 'admin'
-                        WHEN fr.relationship_type IN ('parent', 'guardian') THEN 'write'
-                        ELSE 'read'
-                    END as access_level
-                FROM medical_documents d
-                LEFT JOIN profiles p ON d.profile_id = p.id
-                LEFT JOIN family_relations fr ON 
-                    (fr.parent_profile_id = ? AND fr.child_profile_id = d.profile_id)
-                    OR (fr.child_profile_id = ? AND fr.parent_profile_id = d.profile_id)
-                WHERE d.id = ? AND d.is_archived = false
-                    AND (d.profile_id = ? OR fr.id IS NOT NULL)`,
-                [profileId, profileId, profileId, id, profileId]
+                    'write' as access_level  -- Simplified access level
+                 FROM medical_documents d
+                 LEFT JOIN profiles p ON d.profile_id = p.id
+                 WHERE d.is_archived = false 
+                    AND (d.profile_id = ? OR d.owner_profile_id = ?)
+                 ORDER BY d.created_at DESC`,
+                [profileId, req.user.profileId]
             );
-
-            if (!documents.length) {
-                throw new DocumentProcessingError('Document not found or access denied');
-            }
-
-            res.json(documents[0]);
+            res.json(documents);
         } catch (error) {
             next(error);
         }
@@ -260,18 +217,18 @@ class DocumentController {
         try {
             const { id } = req.params;
             const profileId = req.user.profileId;
-
+    
             const [result] = await db.execute(
                 `UPDATE medical_documents 
                  SET is_archived = true 
-                 WHERE id = ? AND profile_id = ?`,
-                [id, profileId]
+                 WHERE id = ? AND (profile_id = ? OR owner_profile_id = ?)`,
+                [id, profileId, profileId]
             );
-
+    
             if (result.affectedRows === 0) {
-                throw new DocumentProcessingError('Document not found');
+                throw new DocumentProcessingError('Document not found or permission denied');
             }
-
+    
             res.json({ message: 'Document deleted successfully' });
         } catch (error) {
             next(error);
@@ -279,33 +236,48 @@ class DocumentController {
     }
     
     async getExtractedData(req, res, next) {
-      try {
+        try {
           const { id } = req.params;
           const profileId = req.user.profileId;
-
-          // First verify document belongs to user
+      
+          // Add more detailed logging
+          console.log(`Attempting to fetch extracted data for document ${id}, profile ${profileId}`);
+      
+          // Verify document ownership and processing status
           const [documents] = await db.execute(
-              `SELECT id FROM medical_documents 
-               WHERE id = ? AND profile_id = ?`,
-              [id, profileId]
+            `SELECT * FROM medical_documents 
+             WHERE id = ? AND profile_id = ? 
+             AND processed_status = 'completed'`,
+            [id, profileId]
           );
-
+      
           if (documents.length === 0) {
-              throw new DocumentProcessingError('Document not found');
+            console.log('Document not found or not processed');
+            return res.status(404).json({ 
+              message: 'Document not found or not processed',
+              status: 'error'
+            });
           }
-
-          // Get extracted medicines
+      
+          // Fetch extracted medicines with more error handling
           const [medicines] = await db.execute(
-              `SELECT * FROM extracted_medicines 
-               WHERE document_id = ?`,
-              [id]
+            `SELECT * FROM extracted_medicines 
+             WHERE document_id = ?`,
+            [id]
           );
-
-          res.json(medicines);
-      } catch (error) {
+      
+          console.log('Extracted medicines:', medicines);
+      
+          res.json({
+            medicines: medicines || [],
+            status: 'success'
+          });
+      
+        } catch (error) {
+          console.error('Detailed extraction error:', error);
           next(error);
+        }
       }
-  }
 
   async retryProcessing(req, res, next) {
         try {
@@ -461,23 +433,83 @@ class DocumentController {
         try {
             const profileId = req.user.profileId;
     
-            const [documents] = await db.execute(
-                `SELECT d.*, p.full_name as owner_name
-                 FROM medical_documents d
-                 JOIN profiles p ON d.profile_id = p.id
-                 WHERE d.is_archived = false
-                 AND (
-                    JSON_CONTAINS(d.shared_with, ?)
+            const [documents] = await db.execute(`
+                SELECT DISTINCT d.*, 
+                       p.full_name as owner_name,
+                       CASE 
+                         WHEN d.profile_id = ? THEN 'admin'
+                         WHEN fr.relationship_type IN ('parent', 'guardian') THEN 'write'
+                         ELSE 'read'
+                       END as access_level
+                FROM medical_documents d
+                JOIN profiles p ON d.profile_id = p.id
+                LEFT JOIN family_relations fr ON 
+                    (fr.parent_profile_id = ? AND fr.child_profile_id = d.profile_id)
+                    OR (fr.child_profile_id = ? AND fr.parent_profile_id = d.profile_id)
+                WHERE d.is_archived = false
+                AND (
+                    JSON_CONTAINS(COALESCE(d.shared_with, '[]'), CAST(? AS JSON))
                     OR d.access_level = 'shared'
-                 )`,
-                [JSON.stringify(profileId)]
+                    OR fr.id IS NOT NULL
+                )
+                AND d.profile_id != ?
+                ORDER BY d.created_at DESC`,
+                [profileId, profileId, profileId, profileId, profileId]
             );
     
-            res.json(documents);
+            // Format the response
+            const formattedDocuments = documents.map(doc => ({
+                ...doc,
+                created_at: new Date(doc.created_at).toISOString(),
+                updated_at: new Date(doc.updated_at).toISOString(),
+                last_processed_at: doc.last_processed_at ? new Date(doc.last_processed_at).toISOString() : null
+            }));
+    
+            res.json(formattedDocuments);
         } catch (error) {
+            console.error('Error in getSharedDocuments:', error);
             next(error);
         }
     }
+
+    async extractMedicineInfo(text, documentId) {
+        try {
+          const medicines = [];
+          const prescriptionMatch = text.match(/PRESCRIPTION:[\s\S]*?(?=VITALS:|$)/i);
+          if (prescriptionMatch) {
+            const prescriptionText = prescriptionMatch[0];
+            const medicationEntries = prescriptionText.split(/\d+\./g).filter(entry => entry.trim());
+      
+            for (const entry of medicationEntries) {
+              // Enhanced medicine extraction logic using regex
+              const medicineMatch = entry.match(/([A-Za-z\s]+(?:\s*\([A-Za-z\s]+\))?)\s*(\d+(?:\.\d+)?\s*(?:mg|g|mcg|IU|units\/mL))/i);
+              if (medicineMatch) {
+                const medicineName = medicineMatch[1].trim();
+                const dosage = medicineMatch[2];
+      
+                // Match with reference data
+                const medicineInfo = this.findMedicineNameInLine(medicineName);
+                if (medicineInfo) {
+                  medicines.push({
+                    medicine_name: medicineInfo.name,
+                    generic_name: medicineInfo.genericName,
+                    category: medicineInfo.category,
+                    dosage: dosage,
+                    frequency: this.extractFrequency(entry),
+                    duration: this.extractDuration(entry),
+                    instructions: this.extractInstructions(entry),
+                    confidence_score: medicineInfo.confidence
+                  });
+                }
+              }
+            }
+          }
+          return medicines;
+        } catch (error) {
+          console.error('Medicine extraction error:', error);
+          throw new Error('Failed to extract medicines');
+        }
+      }
 }
 
 module.exports = new DocumentController();
