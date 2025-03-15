@@ -44,20 +44,50 @@ const pollStatus = async (documentId: number): Promise<ProcessingStatus> => {
 };
 
 export const DocumentProcessingService = {
+  // Add new getMemberDocuments method
+  getMemberDocuments: async (profileId: number): Promise<ProcessedDocument[]> => {
+    try {
+      const response = await api.get(`/api/documents/profile/${profileId}`);
+      return response.data.documents;
+    } catch (error: any) {
+      console.error('Error fetching member documents:', error);
+      return [];
+    }
+  },
+
+  getProcessingStatus: async (documentId: number): Promise<ProcessingStatus> => {
+    try {
+      const response = await api.get(`/api/documents/${documentId}/status`);
+      return response.data;
+    } catch (error) {
+      console.error('Error getting processing status:', error);
+      throw error;
+    }
+  },
+  
   processDocument: async (documentId: number): Promise<ProcessedDocument> => {
     try {
       // Start processing
       await api.post(`/api/documents/${documentId}/process`);
       
-      // Wait for completion
-      const status = await pollStatus(documentId);
+      // Poll for status
+      let attempts = 0;
+      const maxAttempts = 30; // 30 seconds timeout
       
-      if (status.status === 'failed') {
-        throw new Error(status.message || 'Processing failed');
+      while (attempts < maxAttempts) {
+        const status = await this.getProcessingStatus(documentId);
+        
+        if (status.status === 'completed' || status.status === 'failed') {
+          return status;
+        }
+        
+        await new Promise(resolve => setTimeout(resolve, 1000));
+        attempts++;
       }
-
-      return status;
+      
+      throw new Error('Document processing timeout');
     } catch (error: any) {
+      console.error('Document processing error:', error);
       throw new Error(error.response?.data?.message || 'Failed to process document');
     }
   },
@@ -65,8 +95,29 @@ export const DocumentProcessingService = {
   getExtractedData: async (documentId: number): Promise<DocumentProcessingResult> => {
     try {
       const response = await api.get(`/api/documents/${documentId}/extracted-data`);
-      return response.data;
+      const data = response.data;
+
+      // Transform the data to match the expected format
+      return {
+        vitals: {
+          bloodPressure: data.vitals?.blood_pressure || 'N/A',
+          bloodGlucose: data.vitals?.blood_glucose || 'N/A',
+          hbA1c: data.vitals?.hba1c || 'N/A'
+        },
+        medicines: data.medicines?.map((med: any) => ({
+          name: med.medicine_name,
+          dosage: med.dosage,
+          frequency: med.frequency,
+          duration: med.duration,
+          instructions: med.instructions,
+          refills: med.refills
+        })) || [],
+        rawText: data.ocr_text || data.rawText || '',
+        visitDate: data.visitDate,
+        nextAppointment: data.nextAppointment
+      };
     } catch (error: any) {
+      console.error('Error getting extracted data:', error);
       throw new Error(error.response?.data?.message || 'Failed to get extracted data');
     }
   },
@@ -133,6 +184,19 @@ export const DocumentProcessingService = {
       return response.data;
     } catch (error: any) {
       throw new Error(error.response?.data?.message || 'Failed to get medications');
+    }
+  },
+
+  
+
+  // Add method to get document metadata
+  getDocumentMetadata: async (documentId: number): Promise<any> => {
+    try {
+      const response = await api.get(`/api/documents/${documentId}/metadata`);
+      return response.data;
+    } catch (error: any) {
+      console.error('Error fetching document metadata:', error);
+      return null;
     }
   }
 };

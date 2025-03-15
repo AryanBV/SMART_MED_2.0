@@ -12,13 +12,13 @@ class DocumentProcessingController {
     const connection = await db.getConnection();
     try {
         const { id } = req.params;
-        const profileId = req.user.profileId;
+        console.log('Starting document processing for ID:', id);
 
         await connection.beginTransaction();
 
-        // Get document
+        // Get document info and profile
         const [documents] = await connection.execute(
-            `SELECT md.*, p.full_name as owner_name 
+            `SELECT md.*, p.id as profile_id 
              FROM medical_documents md
              JOIN profiles p ON md.profile_id = p.id
              WHERE md.id = ?`,
@@ -30,15 +30,29 @@ class DocumentProcessingController {
         }
 
         const document = documents[0];
-        
-        // Process document and extract all data
-        const extractedText = await documentProcessor.processDocument(document.file_path, id);
-        const medicines = await documentProcessor.extractMedicineInfo(extractedText, id);
-        const vitals = await documentProcessor.extractVitals(extractedText);
-        const patientInfo = await documentProcessor.extractPatientInfo(extractedText);
-        const appointmentInfo = await documentProcessor.extractAppointmentInfo(extractedText);
+        console.log('Processing document:', document.file_name);
 
-        // Save vitals to profile
+        // Update status to processing
+        await connection.execute(
+            `UPDATE medical_documents 
+             SET processed_status = 'processing',
+                 processing_attempts = processing_attempts + 1,
+                 last_processed_at = CURRENT_TIMESTAMP
+             WHERE id = ?`,
+            [id]
+        );
+
+        // Extract text and data
+        const extractedText = await documentProcessor.processDocument(document.file_path);
+        const vitals = await documentProcessor.extractVitals(extractedText);
+        const medicines = await documentProcessor.extractMedicineInfo(extractedText);
+
+        console.log('Extracted data:', {
+            vitalsFound: !!vitals,
+            medicinesFound: medicines.length
+        });
+
+        // Update profile with vitals if found
         if (vitals) {
             await connection.execute(
                 `UPDATE profiles 
@@ -47,8 +61,31 @@ class DocumentProcessingController {
                      hba1c = ?,
                      updated_at = CURRENT_TIMESTAMP
                  WHERE id = ?`,
-                [vitals.blood_pressure, vitals.blood_glucose, vitals.hba1c, profileId]
+                [vitals.blood_pressure, vitals.blood_glucose, vitals.hba1c, document.profile_id]
             );
+        }
+
+        // Save medicines
+        if (medicines.length > 0) {
+            for (const medicine of medicines) {
+                await connection.execute(
+                    `INSERT INTO extracted_medicines 
+                     (document_id, medicine_name, generic_name, medicine_category,
+                      dosage, frequency, duration, instructions, confidence_score)
+                     VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?)`,
+                    [
+                        id,
+                        medicine.medicine_name,
+                        medicine.generic_name,
+                        medicine.medicine_category,
+                        medicine.dosage,
+                        medicine.frequency,
+                        medicine.duration,
+                        medicine.instructions,
+                        medicine.confidence_score
+                    ]
+                );
+            }
         }
 
         // Update document status
@@ -62,10 +99,9 @@ class DocumentProcessingController {
             [
                 extractedText,
                 JSON.stringify({
-                    patientInfo,
                     vitals,
-                    appointmentInfo,
-                    medicineCount: medicines.length
+                    medicines,
+                    extractedAt: new Date().toISOString()
                 }),
                 id
             ]
@@ -76,20 +112,35 @@ class DocumentProcessingController {
         res.json({
             success: true,
             data: {
-                patientInfo,
                 vitals,
                 medicines,
-                appointmentInfo
+                rawText: extractedText
             }
         });
 
     } catch (error) {
+        console.error('Document processing error:', error);
         await connection.rollback();
+        
+        // Update document status to failed
+        try {
+            await connection.execute(
+                `UPDATE medical_documents 
+                 SET processed_status = 'failed',
+                     processing_error = ?
+                 WHERE id = ?`,
+                [error.message, id]
+            );
+            await connection.commit();
+        } catch (updateError) {
+            console.error('Error updating document status:', updateError);
+        }
+        
         next(error);
     } finally {
         connection.release();
     }
-  }
+}
 
   async testOCR(req, res, next) {
     try {

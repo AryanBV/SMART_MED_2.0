@@ -1,4 +1,4 @@
-// File: client/src/hooks/useDashboardData.ts
+// Path: client/src/hooks/useDashboardData.ts
 
 import { useState } from 'react';
 import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query';
@@ -20,62 +20,189 @@ export const useDashboardData = (initialFilters?: DashboardFilters) => {
   } = useQuery({
     queryKey: ['dashboard', filters],
     queryFn: async () => {
-      const response = await DashboardService.getDashboardData(filters);
-      
-      if (!response.success) {
-        throw new Error('Failed to fetch dashboard data');
-      }
+      try {
+        const response = await DashboardService.getDashboardData(filters);
+        
+        if (!response?.success) {
+          console.error('Dashboard data fetch failed:', response);
+          throw new Error('Failed to fetch dashboard data');
+        }
 
-      const data = response.data;
-      
-      // Process members with documents
-      const membersWithExtractedData = await Promise.all(
-        data.familyMembers.map(async (member: FamilyMemberHealth) => {
-          if (member.documentCount && member.documentCount > 0) {
+        const data = response.data;
+        
+        // Process members with documents
+        const membersWithExtractedData = await Promise.all(
+          data.familyMembers.map(async (member: FamilyMemberHealth) => {
             try {
-              // Get the latest document for this member
               const documents = await DocumentProcessingService.getMemberDocuments(member.id);
-              const latestDoc = documents[0]; // Assuming sorted by date
+              console.log(`Documents for member ${member.id}:`, documents);
+              // Rest of the code...
+            } catch (error) {
+              console.error(`Error fetching documents for member ${member.id}:`, error);
+              throw error;
+            }
+            
+            try {
+              // Get all documents for this member
+              const documents = await DocumentProcessingService.getMemberDocuments(member.id);
+              console.log(`Documents for member ${member.id}:`, documents);
 
-              if (latestDoc && latestDoc.id) {
-                const extractedData = await DocumentProcessingService.getExtractedData(latestDoc.id);
-                
+              if (!documents?.length) {
+                console.log(`No documents found for member ${member.id}`);
                 return {
                   ...member,
                   metrics: {
-                    bloodPressure: extractedData.vitals?.bloodPressure || member.metrics.bloodPressure,
-                    bloodGlucose: extractedData.vitals?.bloodGlucose || member.metrics.bloodGlucose,
-                    hbA1c: extractedData.vitals?.hbA1c || member.metrics.hbA1c
+                    bloodPressure: 'N/A',
+                    bloodGlucose: 'N/A',
+                    hbA1c: 'N/A'
                   },
-                  medications: extractedData.medicines || member.medications || [],
-                  lastDocument: {
-                    ...latestDoc,
-                    extractedText: extractedData.rawText,
-                    processedData: extractedData
-                  }
+                  medications: [],
+                  lastDocument: null,
+                  documentCount: 0
                 };
               }
+
+              // Get the latest document
+              const latestDoc = documents[0];
+              console.log(`Latest document for member ${member.id}:`, latestDoc);
+
+              // If document is pending or processing
+              if (['pending', 'processing'].includes(latestDoc.processed_status)) {
+                // Start processing if pending
+                if (latestDoc.processed_status === 'pending') {
+                  try {
+                    await DocumentProcessingService.processDocument(latestDoc.id);
+                  } catch (processError) {
+                    console.error(`Error processing document ${latestDoc.id}:`, processError);
+                  }
+                }
+
+                return {
+                  ...member,
+                  metrics: {
+                    bloodPressure: 'N/A',
+                    bloodGlucose: 'N/A',
+                    hbA1c: 'N/A'
+                  },
+                  medications: [],
+                  lastDocument: {
+                    ...latestDoc,
+                    extractedText: '',
+                    processedData: null
+                  },
+                  documentCount: documents.length
+                };
+              }
+
+              // Get extracted data for completed documents
+              let extractedData = null;
+              if (latestDoc.processed_status === 'completed') {
+                try {
+                  extractedData = await DocumentProcessingService.getExtractedData(latestDoc.id);
+                  console.log(`Extracted data for document ${latestDoc.id}:`, extractedData);
+                } catch (extractError) {
+                  console.error(`Error getting extracted data for document ${latestDoc.id}:`, extractError);
+                }
+              }
+
+              return {
+                ...member,
+                metrics: {
+                  bloodPressure: extractedData?.vitals?.bloodPressure || 'N/A',
+                  bloodGlucose: extractedData?.vitals?.bloodGlucose || 'N/A',
+                  hbA1c: extractedData?.vitals?.hbA1c || 'N/A'
+                },
+                medications: extractedData?.medicines || [],
+                lastDocument: {
+                  ...latestDoc,
+                  extractedText: extractedData?.rawText || '',
+                  processedData: extractedData
+                },
+                documentCount: documents.length,
+                lastUpdate: latestDoc.updated_at || new Date().toISOString()
+              };
+
             } catch (error) {
               console.error(`Error processing data for member ${member.id}:`, error);
-              return member; // Return original member data if processing fails
+              toast({
+                title: "Error",
+                description: `Failed to process data for ${member.name}`,
+                variant: "destructive",
+              });
+              return {
+                ...member,
+                metrics: {
+                  bloodPressure: 'N/A',
+                  bloodGlucose: 'N/A',
+                  hbA1c: 'N/A'
+                },
+                medications: [],
+                lastDocument: null,
+                documentCount: 0
+              };
             }
-          }
-          return member;
-        })
-      );
+          })
+        );
 
-      return {
-        ...data,
-        familyMembers: membersWithExtractedData
-      };
+        return {
+          ...data,
+          familyMembers: membersWithExtractedData
+        };
+
+      } catch (error) {
+        console.error('Dashboard data fetch error:', error);
+        throw error;
+      }
     },
-    refetchInterval: 30000, // Refresh every 30 seconds
+    refetchInterval: 15000, // Refresh every 15 seconds
+    retry: 3, // Retry failed requests 3 times
+    staleTime: 10000, // Consider data stale after 10 seconds
+  });
+
+  // Process document mutation with automatic extraction
+  const processDocumentMutation = useMutation({
+    mutationFn: async (documentId: number) => {
+      try {
+        // Start processing
+        const processedDoc = await DocumentProcessingService.processDocument(documentId);
+        
+        if (processedDoc.processed_status === 'completed') {
+          const extractedData = await DocumentProcessingService.getExtractedData(documentId);
+          return { ...processedDoc, extractedData };
+        }
+        
+        throw new Error(processedDoc.error || 'Document processing failed');
+      } catch (error: any) {
+        console.error('Document processing error:', error);
+        throw error;
+      }
+    },
+    onSuccess: (result) => {
+      queryClient.invalidateQueries({ queryKey: ['dashboard'] });
+      queryClient.invalidateQueries({ queryKey: ['documents'] });
+      toast({
+        title: "Success",
+        description: "Document processed successfully",
+      });
+    },
+    onError: (error: any) => {
+      toast({
+        title: "Processing Error",
+        description: error.message || "Failed to process document",
+        variant: "destructive",
+      });
+    }
   });
 
   // Update metrics mutation
   const updateMetricsMutation = useMutation({
-    mutationFn: ({ memberId, metrics }) => 
-      DashboardService.updateHealthMetrics(memberId, metrics),
+    mutationFn: async ({ memberId, metrics }) => {
+      const response = await DashboardService.updateHealthMetrics(memberId, metrics);
+      if (!response.success) {
+        throw new Error(response.message || 'Failed to update health metrics');
+      }
+      return response.data;
+    },
     onSuccess: () => {
       queryClient.invalidateQueries({ queryKey: ['dashboard'] });
       toast({
@@ -86,48 +213,24 @@ export const useDashboardData = (initialFilters?: DashboardFilters) => {
     onError: (error: any) => {
       toast({
         title: "Error",
-        description: error.response?.data?.message || "Failed to update health metrics",
+        description: error.message || "Failed to update health metrics",
         variant: "destructive",
       });
-    }
-  });
-
-  // Process document mutation with automatic extraction
-  const processDocumentMutation = useMutation({
-    mutationFn: async (documentId: number) => {
-      const processedDoc = await DocumentProcessingService.processDocument(documentId);
-      const extractedData = await DocumentProcessingService.getExtractedData(documentId);
-      return { ...processedDoc, extractedData };
-    },
-    onSuccess: (result) => {
-      queryClient.invalidateQueries({ queryKey: ['dashboard'] });
-      queryClient.invalidateQueries({ queryKey: ['documents'] });
-      toast({
-        title: "Success",
-        description: `Document processed and data extracted successfully`,
-      });
-    },
-    onError: (error: any) => {
-      toast({
-        title: "Error",
-        description: error.response?.data?.message || "Failed to process document",
-        variant: "destructive",
-      });
-    }
-  });
-
-  // Acknowledge alert mutation
-  const acknowledgeAlertMutation = useMutation({
-    mutationFn: (alertId: number) => 
-      DashboardService.acknowledgeAlert(alertId),
-    onSuccess: () => {
-      queryClient.invalidateQueries({ queryKey: ['dashboard'] });
     }
   });
 
   const refreshDashboard = async () => {
-    await queryClient.invalidateQueries({ queryKey: ['dashboard'] });
-    await refetch();
+    try {
+      await queryClient.invalidateQueries({ queryKey: ['dashboard'] });
+      return await refetch();
+    } catch (error) {
+      console.error('Error refreshing dashboard:', error);
+      toast({
+        title: "Refresh Error",
+        description: "Failed to refresh dashboard data",
+        variant: "destructive",
+      });
+    }
   };
 
   return {
@@ -139,7 +242,6 @@ export const useDashboardData = (initialFilters?: DashboardFilters) => {
     refetch: refreshDashboard,
     updateMetrics: updateMetricsMutation.mutateAsync,
     processDocument: processDocumentMutation.mutateAsync,
-    acknowledgeAlert: acknowledgeAlertMutation.mutateAsync,
     isProcessing: processDocumentMutation.isLoading,
     isUpdating: updateMetricsMutation.isLoading
   };

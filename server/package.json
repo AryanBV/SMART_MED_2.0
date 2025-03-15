@@ -27,7 +27,7 @@
     "jsonwebtoken": "^9.0.2",
     "multer": "^1.4.5-lts.1",
     "mysql2": "^3.6.5",
-    "pdfjs-dist": "2.16.105",
+    "pdfjs-dist": "^2.16.105",
     "sharp": "^0.32.6",
     "tesseract.js": "^4.1.1",
     "uuid": "^9.0.1"

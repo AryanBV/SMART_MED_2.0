@@ -101,6 +101,69 @@ class DocumentController {
         }
     }
 
+    async processDocument(req, res, next) {
+        const connection = await db.getConnection();
+        try {
+            const { id } = req.params;
+            console.log('Processing document:', id);
+    
+            // Get document
+            const [documents] = await connection.execute(
+                `SELECT * FROM medical_documents WHERE id = ?`,
+                [id]
+            );
+    
+            if (!documents.length) {
+                throw new DocumentProcessingError('Document not found');
+            }
+    
+            const document = documents[0];
+            console.log('Found document:', document.file_name);
+    
+            // Process document and extract all data
+            const processedData = await documentProcessor.processDocument(document.file_path, id);
+            console.log('Document processed:', processedData?.success);
+    
+            // Update document status
+            await connection.execute(
+                `UPDATE medical_documents 
+                 SET processed_status = 'completed',
+                     ocr_text = ?,
+                     metadata = ?,
+                     last_processed_at = CURRENT_TIMESTAMP
+                 WHERE id = ?`,
+                [
+                    processedData.text,
+                    JSON.stringify({
+                        vitals: processedData.vitals,
+                        medicines: processedData.medicines,
+                        patientInfo: processedData.patientInfo,
+                        extractedAt: new Date().toISOString()
+                    }),
+                    id
+                ]
+            );
+    
+            await connection.commit();
+    
+            res.json({
+                success: true,
+                data: {
+                    vitals: processedData.vitals,
+                    medicines: processedData.medicines,
+                    status: 'completed'
+                }
+            });
+    
+        } catch (error) {
+            console.error('Document processing error:', error);
+            await connection.rollback();
+            next(error);
+        } finally {
+            connection.release();
+        }
+    }
+
     async getDocuments(req, res, next) {
         try {
             const profileId = req.query.profileId || req.user.profileId;
@@ -172,7 +235,115 @@ class DocumentController {
         }
     }
 
-
+    async processDocument(req, res, next) {
+        const connection = await db.getConnection();
+        try {
+            const { id } = req.params;
+            console.log('Starting document processing for ID:', id);
+    
+            // Check if document exists and get its details
+            const [documents] = await connection.execute(
+                `SELECT * FROM medical_documents WHERE id = ?`,
+                [id]
+            );
+    
+            if (!documents.length) {
+                throw new DocumentProcessingError('Document not found');
+            }
+    
+            const document = documents[0];
+            console.log('Processing document:', document.file_name);
+    
+            // Update status to processing
+            await connection.execute(
+                `UPDATE medical_documents 
+                 SET processed_status = 'processing',
+                     processing_attempts = processing_attempts + 1
+                 WHERE id = ?`,
+                [id]
+            );
+    
+            // Extract text using Tesseract
+            const extractedText = await documentProcessor.processDocument(document.file_path);
+            console.log('Extracted text:', extractedText); // Debug log
+    
+            // Extract medicines using the reference data
+            const medicines = await documentProcessor.extractMedicineInfo(extractedText);
+            console.log('Extracted medicines:', medicines);
+    
+            // Save medicines to database
+            if (medicines && medicines.length > 0) {
+                for (const medicine of medicines) {
+                    await connection.execute(
+                        `INSERT INTO extracted_medicines 
+                         (document_id, medicine_name, dosage, frequency, duration, instructions, generic_name, medicine_category)
+                         VALUES (?, ?, ?, ?, ?, ?, ?, ?)`,
+                        [
+                            id,
+                            medicine.medicine_name,
+                            medicine.dosage,
+                            medicine.frequency,
+                            medicine.duration,
+                            medicine.instructions,
+                            medicine.generic_name,
+                            medicine.category
+                        ]
+                    );
+                }
+            }
+    
+            // Update document status
+            await connection.execute(
+                `UPDATE medical_documents 
+                 SET processed_status = 'completed',
+                     ocr_text = ?,
+                     metadata = ?,
+                     last_processed_at = CURRENT_TIMESTAMP
+                 WHERE id = ?`,
+                [
+                    extractedText,
+                    JSON.stringify({
+                        medicines,
+                        extractedAt: new Date().toISOString()
+                    }),
+                    id
+                ]
+            );
+    
+            await connection.commit();
+    
+            res.json({
+                success: true,
+                data: {
+                    medicines,
+                    raw_text: extractedText
+                }
+            });
+    
+        } catch (error) {
+            console.error('Document processing error:', error);
+            await connection.rollback();
+            
+            // Update document status to failed
+            try {
+                await connection.execute(
+                    `UPDATE medical_documents 
+                     SET processed_status = 'failed',
+                     processing_error = ?
+                     WHERE id = ?`,
+                    [error.message, id]
+                );
+                await connection.commit();
+            } catch (updateError) {
+                console.error('Error updating document status:', updateError);
+            }
+    
+            next(error);
+        } finally {
+            connection.release();
+        }
+    }
+    
     async getDocumentWithExtractedData(req, res, next) {
         try {
             const { id } = req.params;
@@ -210,6 +381,69 @@ class DocumentController {
             });
         } catch (error) {
             next(error);
+        }
+    }
+
+    async getProfileDocuments(req, res, next) {
+        const connection = await db.getConnection();
+        try {
+            const { profileId } = req.params;
+            
+            // Get documents with their extracted data
+            const [documents] = await connection.execute(
+                `SELECT 
+                    md.id,
+                    md.file_name,
+                    md.processed_status,
+                    md.created_at,
+                    md.metadata,
+                    md.ocr_text,
+                    p.blood_pressure,
+                    p.blood_glucose,
+                    p.hba1c
+                FROM medical_documents md
+                JOIN profiles p ON md.profile_id = p.id
+                WHERE md.profile_id = ? 
+                AND md.processed_status = 'completed'
+                AND md.is_archived = false
+                ORDER BY md.created_at DESC`,
+                [profileId]
+            );
+    
+            // Format the response
+            const formattedDocuments = documents.map(doc => {
+                let metadata = {};
+                try {
+                    metadata = doc.metadata ? JSON.parse(doc.metadata) : {};
+                } catch (err) {
+                    console.error('Error parsing metadata:', err);
+                }
+    
+                return {
+                    id: doc.id,
+                    fileName: doc.file_name,
+                    processedStatus: doc.processed_status,
+                    createdAt: doc.created_at,
+                    vitals: {
+                        blood_pressure: doc.blood_pressure || 'N/A',
+                        blood_glucose: doc.blood_glucose || 'N/A',
+                        hba1c: doc.hba1c || 'N/A'
+                    },
+                    medicines: metadata.medicines || [],
+                    patientInfo: metadata.patientInfo || {}
+                };
+            });
+    
+            res.json({
+                success: true,
+                documents: formattedDocuments
+            });
+    
+        } catch (error) {
+            console.error('Error in getProfileDocuments:', error);
+            next(error);
+        } finally {
+            connection.release();
         }
     }
     

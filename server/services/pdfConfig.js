@@ -1,9 +1,24 @@
-// server/services/pdfConfig.js
-const pdfjsLib = require('pdfjs-dist/legacy/build/pdf');
-const path = require('path');
+// Path: server/services/pdfConfig.js
 
-// Configure the PDF.js worker
-const pdfjsWorkerPath = path.join(__dirname, '../../node_modules/pdfjs-dist/legacy/build/pdf.worker.js');
-pdfjsLib.GlobalWorkerOptions.workerSrc = pdfjsWorkerPath;
+const pdfjsLib = require('pdfjs-dist/legacy/build/pdf');
+
+// Set workerSrc directly using the node compatibility version
+pdfjsLib.GlobalWorkerOptions.workerSrc = require.resolve(
+  'pdfjs-dist/legacy/build/pdf.worker'
+);
+
+// For node environment
+if (typeof window === 'undefined') {
+  const nodeFS = require('fs');
+  const nodePath = require('path');
+  
+  const pdfjsWorker = require('pdfjs-dist/legacy/build/pdf.worker.js');
+  
+  pdfjsLib.createNodeCanvas = () => ({});
+  pdfjsLib.createNodeCanvasFactory = () => ({});
+  
+  // Set up the fake worker
+  pdfjsLib.WorkerMessageHandler = pdfjsWorker.WorkerMessageHandler;
+}
 
 module.exports = pdfjsLib;
