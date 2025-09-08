@@ -1,241 +1,132 @@
 # SMART_MED_2.0
 
-A comprehensive diabetes management system with family tree visualization and medical document OCR capabilities.
+A modern diabetes management system with family tree visualization and medical document OCR capabilities, built with React, Node.js, and Supabase.
 
-## Features
+## 🚀 Features
 
 - 👥 Interactive Family Tree Visualization
-- 🔒 Hierarchical Access Control
+- 🔒 Secure Authentication with Supabase Auth
 - 📄 Medical Document Management
-- 🔍 OCR Text Extraction
-- 💊 Medicine Name Detection
+- 🔍 OCR Text Extraction for Medicine Detection
+- 💊 Medicine Name Detection and Tracking
 - 📊 Real-time Updates
-- 🎯 Profile Management
+- 🎯 Profile Management for Family Members
 
-## Prerequisites
-
-- Node.js (v18.19.0 or higher)
-- npm (v10.2.3 or higher)
-- MySQL (v8.0+)
-- Git
-
-## Tech Stack
+## 🛠️ Tech Stack
 
 ### Frontend
-- React 18.3.1
-- TypeScript 5.6.3
-- Vite 6.0.11
-- React Query 5.64.2
-- React Flow 11.11.4
-- Tailwind CSS 3.4.1
-- Shadcn/ui Components
+- React 18 with TypeScript
+- Vite for fast development
+- Tailwind CSS & Shadcn/ui
+- React Query for data fetching
+- React Flow for family tree visualization
+- Supabase Client for real-time data
 
 ### Backend
-- Node.js 18.19.0
-- Express 4.21.2
-- MySQL 3.12.0
-- JWT Authentication
-- Tesseract.js 6.0.0
-- Sharp 0.33.5
+- Node.js & Express
+- Supabase for database and authentication
+- Tesseract.js for OCR
+- Sharp for image processing
 
-## Project Setup
+## 📋 Prerequisites
+
+- Node.js (v18.19.0 or higher)
+- npm (v10.0.0 or higher)
+- Supabase account (free tier available)
+
+## 🔧 Setup Instructions
 
 ### 1. Clone the Repository
 
 ```bash
-git clone https://github.com/your-username/SMART_MED_2.0.git
+git clone https://github.com/AryanBV/SMART_MED_2.0.git
 cd SMART_MED_2.0
 ```
 
 ### 2. Install Dependencies
 
-Install all dependencies for client, server, and root project:
-
 ```bash
+# Install all dependencies
 npm run install-all
 ```
 
-Or install separately:
+### 3. Supabase Setup
 
-```bash
-# Root dependencies
-npm install
+1. Create a new project on [Supabase](https://supabase.com)
+2. Go to SQL Editor in your Supabase dashboard
+3. Copy the contents of `supabase/migrations/001_initial_schema.sql`
+4. Run the SQL script in the SQL Editor
 
-# Client dependencies
-cd client
-npm install
+### 4. Environment Configuration
 
-# Server dependencies
-cd ../server
-npm install
+#### Root Directory (.env)
+Copy `.env.example` to `.env` and update:
+```env
+SUPABASE_URL=your_supabase_project_url
+SUPABASE_ANON_KEY=your_supabase_anon_key
+SUPABASE_SERVICE_KEY=your_supabase_service_key
 ```
 
-### 3. Environment Setup
-
-#### Client (.env)
-Create `client/.env`:
-
+#### Client Directory (client/.env)
+Copy `client/.env.example` to `client/.env` and update:
 ```env
-VITE_API_URL=http://localhost:5000
-VITE_JWT_SECRET=your_jwt_secret
+VITE_SUPABASE_URL=your_supabase_project_url
+VITE_SUPABASE_ANON_KEY=your_supabase_anon_key
 ```
 
-#### Server (.env)
-Create `server/.env`:
-
+#### Server Directory (server/.env)
+Copy `server/.env.example` to `server/.env` and update:
 ```env
+SUPABASE_URL=your_supabase_project_url
+SUPABASE_SERVICE_KEY=your_supabase_service_key
 PORT=5000
-DB_HOST=localhost
-DB_USER=your_db_user
-DB_PASSWORD=your_db_password
-DB_NAME=SMART_MED_2
-JWT_SECRET=your_jwt_secret
-UPLOAD_DIR=uploads
-```
-
-### 4. Database Setup
-
-1. Create MySQL database:
-```sql
-CREATE DATABASE SMART_MED_2;
-```
-
-2. Run database schema:
-```bash
-cd database
-mysql -u your_username -p SMART_MED_2 < schema.sql
-```
-
-3. Import medicine reference data:
-```bash
-cd seeds
-node medicines.js
+JWT_SECRET=your_jwt_secret_key
 ```
 
 ### 5. Start Development Servers
 
-Run both frontend and backend in development mode:
-
 ```bash
+# Run both frontend and backend
 npm run dev
-```
 
-Or run separately:
-
-```bash
-# Frontend only
-npm run client
-
-# Backend only
-npm run server
+# Or run separately:
+npm run client  # Frontend only
+npm run server  # Backend only
 ```
 
 The application will be available at:
 - Frontend: http://localhost:3000
 - Backend: http://localhost:5000
 
-## Project Structure
+## 📁 Project Structure
 
 ```
 SMART_MED_2.0/
-├── client/                 # Frontend React application
-│   ├── public/            # Public assets
-│   └── src/               # Source files
-│       ├── assets/        # Static assets
-│       ├── components/    # React components
-│       ├── contexts/      # React contexts
-│       ├── hooks/         # Custom hooks
-│       ├── interfaces/    # TypeScript interfaces
-│       ├── pages/         # Page components
-│       ├── services/      # API services
-│       └── utils/         # Utility functions
-├── server/                # Backend Node.js application
-│   ├── config/           # Configuration files
+├── client/                 # React frontend
+│   ├── src/
+│   │   ├── components/    # Reusable components
+│   │   ├── pages/        # Page components
+│   │   ├── services/     # API services
+│   │   └── utils/        # Utility functions
+├── server/                # Node.js backend
 │   ├── controllers/      # Route controllers
 │   ├── middleware/       # Express middleware
-│   ├── models/           # Database models
-│   ├── routes/           # API routes
-│   └── services/         # Business logic
-└── database/             # Database related files
-    ├── migrations/       # Database migrations
-    └── seeds/            # Seed data
+│   ├── routes/          # API routes
+│   └── services/        # Business logic
+└── supabase/            # Database migrations
+    └── migrations/      # SQL migration files
 ```
 
-## API Documentation
+## 🔐 Security Features
 
-### Authentication
-```
-POST /api/auth/register  - Register new user
-POST /api/auth/login     - User login
-POST /api/auth/logout    - User logout
-```
-
-### Profiles
-```
-GET    /api/profiles     - Get all profiles
-POST   /api/profiles     - Create new profile
-GET    /api/profiles/:id - Get specific profile
-PUT    /api/profiles/:id - Update profile
-DELETE /api/profiles/:id - Delete profile
-```
-
-### Family Relations
-```
-GET    /api/family/tree         - Get family tree
-POST   /api/family/relation     - Create relation
-DELETE /api/family/relation/:id - Delete relation
-```
-
-### Documents
-```
-POST /api/documents/upload    - Upload document
-GET  /api/documents/:id       - Get document
-GET  /api/documents/extract/:id - Extract text from document
-```
-
-## Features in Detail
-
-### Family Tree Visualization
-- Interactive D3-based visualization
-- Drag and drop interface
-- Real-time updates
-- Relationship validation
-- Context menu for quick actions
-
-### Document Management
-- Secure file upload
-- OCR text extraction
-- Medicine name detection
-- Version control
-- Access permissions
-
-### Profile Management
-- Hierarchical access control
-- Parent-child relationships
-- Profile linking
-- Activity tracking
-
-## Security Features
-
-- JWT authentication
-- Password hashing (bcrypt)
+- Supabase Authentication
+- Row Level Security (RLS) policies
+- JWT token validation
 - Input validation
 - File type validation
-- Access control
-- Rate limiting
-- XSS protection
-- CSRF protection
+- Secure file upload
 
-## Performance Optimizations
-
-- Image optimization
-- Caching strategies
-- Database indexing
-- Lazy loading
-- Efficient state management
-- Optimized queries
-
-## Contributing
+## 🤝 Contributing
 
 1. Fork the repository
 2. Create your feature branch (`git checkout -b feature/AmazingFeature`)
@@ -243,3 +134,16 @@ GET  /api/documents/extract/:id - Extract text from document
 4. Push to the branch (`git push origin feature/AmazingFeature`)
 5. Open a Pull Request
 
+## 📝 License
+
+This project is licensed under the ISC License.
+
+## 👨‍💻 Author
+
+Aryan BV
+
+## 🙏 Acknowledgments
+
+- Supabase for the excellent backend platform
+- Shadcn/ui for beautiful UI components
+- React Flow for the family tree visualization
