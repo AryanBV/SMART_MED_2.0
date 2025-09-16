@@ -1,0 +1,28 @@
+services:
+  - type: web
+    name: smartmed-backend
+    env: node
+    plan: free
+    buildCommand: cd server && npm install
+    startCommand: cd server && npm start
+    envVars:
+      - key: NODE_ENV
+        value: production
+      - key: PORT
+        value: 10000
+      - key: JWT_SECRET
+        value: smartmed2_secret_key_2024_secure
+      - key: REFRESH_TOKEN_SECRET
+        value: smartmed2_refresh_token_key_2024
+      - key: ACCESS_TOKEN_EXPIRY
+        value: 15m
+      - key: REFRESH_TOKEN_EXPIRY
+        value: 7d
+      - key: SUPABASE_URL
+        value: https://xlcnkzfbqvzpouywzwkm.supabase.co
+      - key: SUPABASE_ANON_KEY
+        value: eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZSIsInJlZiI6InhsY25remZicXZ6cG91eXd6d2ttIiwicm9sZSI6ImFub24iLCJpYXQiOjE3NTczODU2MDksImV4cCI6MjA3Mjk2MTYwOX0.A5ayj68fRKa88T04SnGYqVEDJLUn3c5YJIQyeViFTAA
+      - key: SUPABASE_SERVICE_KEY
+        value: eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZSIsInJlZiI6InhsY25remZicXZ6cG91eXd6d2ttIiwicm9sZSI6InNlcnZpY2Vfcm9sZSIsImlhdCI6MTc1NzM4NTYwOSwiZXhwIjoyMDcyOTYxNjA5fQ.9r2ci4AM3SfC8ExVPnd6tze4NGF5ZchcG3z_L-4qnGQ
+      - key: FRONTEND_URL
+        value: https://your-vercel-app.vercel.app

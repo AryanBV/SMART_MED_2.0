@@ -6,26 +6,22 @@ This project uses a split deployment strategy:
 - **Backend**: Railway (Node.js API)
 - **Database**: Supabase (Already configured)
 
-## Backend Deployment (Railway)
+## Backend Deployment (Render - Free Alternative)
 
-### 1. Install Railway CLI
-```bash
-npm install -g @railway/cli
-```
+### 1. Deploy to Render
+- Go to [render.com](https://render.com)
+- Sign up with your GitHub account (no credit card required)
+- Click "New +" → "Web Service"
+- Connect your GitHub repository
+- Select "SMART_MED_2.0" repository
 
-### 2. Deploy to Railway
-```bash
-# Login to Railway
-railway login
+### 2. Configure Build Settings
+- **Build Command**: `cd server && npm install`
+- **Start Command**: `cd server && npm start`
+- **Environment**: `Node`
+- **Plan**: `Free`
 
-# Initialize project
-railway init
-
-# Deploy
-railway up
-```
-
-### 3. Set Environment Variables in Railway Dashboard
+### 3. Set Environment Variables in Render Dashboard
 ```
 NODE_ENV=production
 PORT=5000
