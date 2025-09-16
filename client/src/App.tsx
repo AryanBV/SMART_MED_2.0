@@ -14,7 +14,7 @@ import DocumentsPage from '@/pages/DocumentsPage';
 import SettingsPage from '@/pages/SettingsPage';
 import { Toaster } from '@/components/ui/toaster';
 import { QueryClient, QueryClientProvider } from '@tanstack/react-query';
-import { SmartRedirect } from '@/components/SmartRedirect';
+import SmartRedirect from '@/components/SmartRedirect';
 
 const queryClient = new QueryClient({
   defaultOptions: {

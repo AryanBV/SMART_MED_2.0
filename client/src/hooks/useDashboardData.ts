@@ -1,6 +1,6 @@
 // Hook for dashboard data management
 import { useQuery } from '@tanstack/react-query';
-import { ApiService } from '@/services/api';
+import api from '@/services/api';
 import type { DashboardData } from '@/interfaces/types';
 
 interface UseDashboardDataOptions {

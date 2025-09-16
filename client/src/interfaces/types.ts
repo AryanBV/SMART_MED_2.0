@@ -3,7 +3,7 @@ export interface User {
   id: string;
   email: string;
   name?: string;
-  token?: string;
+  token: string;
 }
 
 // Profile types
@@ -39,9 +39,12 @@ export interface Document {
 
 // Medication types
 export interface Medication {
+  id: string;
   name: string;
   dosage: string;
   frequency: string;
+  instructions: string;
+  refills: number;
   start_date?: string;
   end_date?: string;
   notes?: string;
@@ -151,4 +154,59 @@ export interface ProfileFormData {
   phone?: string;
   address?: string;
   emergency_contact?: string;
+}
+
+// Additional Dashboard types
+export interface DashboardAlert {
+  id: string;
+  type: 'warning' | 'info' | 'error';
+  message: string;
+  timestamp: Date;
+}
+
+export interface FamilyMemberHealth {
+  id: string;
+  name: string;
+  healthStatus: string;
+  medications: Medication[];
+  lastCheckup: Date;
+}
+
+export interface DashboardUpdate {
+  id: string;
+  type: string;
+  message: string;
+  timestamp: Date;
+  member?: string;
+}
+
+export interface DashboardAppointment {
+  id: string;
+  title: string;
+  date: Date;
+  doctor: string;
+  type: string;
+}
+
+export interface FamilyMemberDocument {
+  id: string;
+  name: string;
+  type: string;
+  uploadDate: Date;
+  size: number;
+  member: string;
+}
+
+export interface DocumentType {
+  value: string;
+  label: string;
+}
+
+// Auth Context types
+export interface AuthContextType {
+  user: User | null;
+  loading: boolean;
+  login: (email: string, password: string) => Promise<void>;
+  logout: () => void;
+  register: (email: string, password: string) => Promise<void>;
 }

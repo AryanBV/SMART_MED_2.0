@@ -16,7 +16,7 @@ import {
 } from '@/components/ui/form';
 import { Input } from '@/components/ui/input';
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card';
-import { GoogleAuthButton } from '@/components/auth/GoogleAuthButton';
+import GoogleAuthButton from '@/components/auth/GoogleAuthButton';
 import { handleApiError } from '@/lib/error-utils';  
 
 const loginSchema = z.object({
