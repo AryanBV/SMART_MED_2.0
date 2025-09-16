@@ -20,7 +20,7 @@ const { supabase } = require('./config/database');
 // Middleware Section
 app.use(cors({
   origin: process.env.NODE_ENV === 'production' 
-    ? process.env.FRONTEND_URL || ['https://your-vercel-app.vercel.app']
+    ? true // Allow same-origin requests in production (Vercel)
     : ['http://localhost:3000', 'http://localhost:3001', 'http://localhost:3002'],
   credentials: true,
   methods: ['GET', 'POST', 'PUT', 'DELETE', 'PATCH', 'OPTIONS'],
