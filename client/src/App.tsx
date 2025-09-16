@@ -5,6 +5,7 @@ import { AuthProvider } from '@/contexts/AuthContext';
 import ProtectedRoute from '@/components/auth/ProtectedRoute';
 import LoginPage from '@/pages/LoginPage';
 import RegisterPage from '@/pages/RegisterPage';
+import AuthCallbackPage from '@/pages/AuthCallbackPage';
 import { DashboardLayout } from '@/components/dashboard/DashboardLayout';
 import DashboardPage from '@/pages/DashboardPage';
 import CreateProfilePage from '@/pages/CreateProfilePage';
@@ -12,8 +13,8 @@ import FamilyTreePage from '@/pages/FamilyTreePage';
 import DocumentsPage from '@/pages/DocumentsPage';
 import SettingsPage from '@/pages/SettingsPage';
 import { Toaster } from '@/components/ui/toaster';
-import OCRTestPage from '@/pages/OCRTestPage';
 import { QueryClient, QueryClientProvider } from '@tanstack/react-query';
+import { SmartRedirect } from '@/components/SmartRedirect';
 
 const queryClient = new QueryClient({
   defaultOptions: {
@@ -32,6 +33,8 @@ function App() {
         {/* Public Routes */}
         <Route path="/login" element={<LoginPage />} />
         <Route path="/register" element={<RegisterPage />} />
+        <Route path="/auth/callback" element={<AuthCallbackPage />} />
+        
 
         {/* Profile Creation Route */}
         <Route
@@ -43,15 +46,8 @@ function App() {
           }
         />
 
-        {/* Protected Routes */}
-        <Route
-          path="/"
-          element={
-            <ProtectedRoute requireProfile={true}>
-              <Navigate to="/dashboard" replace />
-            </ProtectedRoute>
-          }
-        />
+        {/* Root route - smart redirect based on auth and profile status */}
+        <Route path="/" element={<SmartRedirect />} />
 
         {/* Dashboard and Settings Routes */}
         <Route
@@ -66,7 +62,6 @@ function App() {
           <Route path="family-tree" element={<FamilyTreePage />} />
           <Route path="documents" element={<DocumentsPage />} />
           {/* Change this line */}
-          <Route path="ocr-test" element={<OCRTestPage />} /> {/* Remove the leading slash */}
           {/* Settings Routes */}
           <Route path="settings" element={<SettingsPage />}>
             <Route index element={<Navigate to="profile" replace />} />
@@ -78,8 +73,8 @@ function App() {
           </Route>
         </Route>
 
-        {/* Redirect to dashboard if no matching route */}
-        <Route path="" element={<Navigate to="/dashboard" replace />} />
+        {/* Catch-all route for unmatched paths */}
+        <Route path="*" element={<SmartRedirect />} />
       </Routes>
       <Toaster />
     </AuthProvider>

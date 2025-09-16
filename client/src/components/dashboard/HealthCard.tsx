@@ -1,11 +1,10 @@
 // Path: C:\Project\SMART_MED_2.0\client\src\components\dashboard\HealthCard.tsx
 
-import React from 'react';
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card';
 import { Badge } from '@/components/ui/badge';
 import { Pill, Activity, Clock, Calendar } from 'lucide-react';
 import { ScrollArea } from '@/components/ui/scroll-area';
-import type { FamilyMemberHealth } from '@/interfaces/dashboard';
+import type { FamilyMemberHealth } from '@/interfaces/types';
 
 interface HealthCardProps {
   member: FamilyMemberHealth;

@@ -10,13 +10,12 @@ import {
   FileLock, 
   User,
   Calendar,
-  Info,
   Trash2,
   Share2,
   CheckSquare,
   Square 
 } from 'lucide-react';
-import type { FamilyMemberDocument } from '@/interfaces/documentTypes';
+import type { FamilyMemberDocument } from '@/interfaces/types';
 import { Badge } from '@/components/ui/badge';
 import {
   Tooltip,
@@ -119,7 +118,7 @@ const DocumentList: React.FC<DocumentListProps> = ({
     );
   }
 
-  const getBadgeVariant = (type: string) => {
+  const getBadgeVariant = (type: string | undefined) => {
     switch (type) {
       case 'prescription':
         return 'default';
@@ -132,7 +131,7 @@ const DocumentList: React.FC<DocumentListProps> = ({
     }
   };
 
-  const getStatusBadgeVariant = (status: string) => {
+  const getStatusBadgeVariant = (status: string | undefined) => {
     switch (status) {
       case 'completed':
         return 'success';
@@ -243,10 +242,10 @@ const DocumentList: React.FC<DocumentListProps> = ({
                     {/* Document Type and Status */}
                     <div className="flex flex-wrap gap-2">
                       <Badge variant={getBadgeVariant(document.document_type)}>
-                        {document.document_type.replace('_', ' ').replace(/\b\w/g, l => l.toUpperCase())}
+                        {document.document_type?.replace('_', ' ')?.replace(/\b\w/g, l => l.toUpperCase()) || 'Unknown'}
                       </Badge>
                       <Badge variant={getStatusBadgeVariant(document.processed_status)}>
-                        {document.processed_status.replace(/\b\w/g, l => l.toUpperCase())}
+                        {document.processed_status?.replace(/\b\w/g, l => l.toUpperCase()) || 'Unknown'}
                       </Badge>
                     </div>
 
@@ -269,7 +268,7 @@ const DocumentList: React.FC<DocumentListProps> = ({
                       )}
                       <div className="flex items-center gap-2">
                         <Badge variant={document.access_level}>
-                          {document.access_level.charAt(0).toUpperCase() + document.access_level.slice(1)} Access
+                          {document.access_level ? (document.access_level.charAt(0).toUpperCase() + document.access_level.slice(1)) : 'Unknown'} Access
                         </Badge>
                       </div>
                     </div>

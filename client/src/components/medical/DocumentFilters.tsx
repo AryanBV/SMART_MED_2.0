@@ -12,10 +12,7 @@ import {
 import { Badge } from '@/components/ui/badge';
 import { Filter, User, ListFilter, Calendar as CalendarIcon } from 'lucide-react';
 import { useProfile } from '@/hooks/useProfile';
-import { useFamilyProfiles } from '@/hooks/useFamilyProfiles';
 import { useAuth } from '@/contexts/AuthContext';
-import type { DocumentType, ProcessingStatus } from '@/interfaces/documentTypes';
-import type { Profile } from '@/interfaces/profile';
 import { DatePicker } from "@/components/ui/date-picker";
 import { format } from "date-fns";
 
@@ -28,6 +25,7 @@ interface DocumentFiltersProps {
   onProfileSelect?: (profileId: string) => void;
   dateRange?: { startDate?: Date; endDate?: Date };
   onDateRangeChange?: (range: { startDate?: Date; endDate?: Date }) => void;
+  familyMembers?: any[];
 }
 
 const DocumentFilters: React.FC<DocumentFiltersProps> = ({
@@ -38,14 +36,15 @@ const DocumentFilters: React.FC<DocumentFiltersProps> = ({
   selectedProfileId,
   onProfileSelect,
   dateRange,
-  onDateRangeChange
+  onDateRangeChange,
+  familyMembers = []
 }) => {
-  const { user } = useAuth();
+  const { } = useAuth();
   const { profile, loading: profileLoading } = useProfile();
-  const { data: familyProfiles, isLoading: familyLoading } = useFamilyProfiles();
+  // Family tree data temporarily disabled
 
   const allProfiles = React.useMemo(() => {
-    const profiles = new Map<string, Profile>();
+    const profiles = new Map<string, any>();
     
     if (profile) {
       profiles.set(profile.id!, {
@@ -54,18 +53,24 @@ const DocumentFilters: React.FC<DocumentFiltersProps> = ({
       });
     }
     
-    familyProfiles?.forEach(familyProfile => {
-      if (familyProfile.id && !profiles.has(familyProfile.id)) {
-        profiles.set(familyProfile.id, familyProfile);
-      }
-    });
+    // Add family members from prop
+    if (familyMembers && familyMembers.length > 0) {
+      familyMembers.forEach((member) => {
+        if (member && member.id) {
+          profiles.set(member.id, {
+            ...member,
+            full_name: member.full_name || member.name || 'Unknown'
+          });
+        }
+      });
+    }
     
     return Array.from(profiles.values());
-  }, [profile, familyProfiles]);
+  }, [profile, familyMembers]);
 
-  const isLoading = profileLoading || familyLoading;
+  const isLoading = profileLoading;
 
-  const getProfileBadgeInfo = (profile: Profile) => {
+  const getProfileBadgeInfo = (profile: any) => {
     if (profile.medical_info?.diabetes_type && profile.medical_info.diabetes_type !== 'none') {
       return `Type ${profile.medical_info.diabetes_type}`;
     }
@@ -222,21 +227,21 @@ const DocumentFilters: React.FC<DocumentFiltersProps> = ({
             <div className="grid grid-cols-2 gap-4">
               <DatePicker
                 placeholder="Start date"
-                value={dateRange?.startDate}
-                onChange={(date: Date | null) => 
+                date={dateRange?.startDate}
+                setDate={(date?: Date) => 
                   onDateRangeChange({ 
                     ...dateRange, 
-                    startDate: date || undefined
+                    startDate: date
                   })
                 }
               />
               <DatePicker
                 placeholder="End date"
-                value={dateRange?.endDate}
-                onChange={(date: Date | null) => 
+                date={dateRange?.endDate}
+                setDate={(date?: Date) => 
                   onDateRangeChange({ 
                     ...dateRange, 
-                    endDate: date || undefined
+                    endDate: date
                   })
                 }
                 minDate={dateRange?.startDate}

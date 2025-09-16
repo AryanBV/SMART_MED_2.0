@@ -1,5 +1,5 @@
 // src/components/family-tree/FamilyMemberDetails.tsx
-import { User2, Users, Baby, Heart, UserPlus, Pencil, Trash2, X, UserIcon, HeartIcon } from 'lucide-react';
+import { User2, Users, Baby, Heart, UserPlus, Pencil, Trash2, X, HeartIcon } from 'lucide-react';
 import { Button } from '@/components/ui/button';
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card';
 import { ScrollArea } from '@/components/ui/scroll-area';

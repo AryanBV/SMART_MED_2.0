@@ -1,6 +1,6 @@
 // Path: C:\Project\SMART_MED_2.0\client\src\components\ui\date-picker.tsx
 
-import * as React from "react"
+import { useState } from "react"
 import { format } from "date-fns"
 import { Calendar as CalendarIcon } from "lucide-react"
 import { cn } from "@/lib/utils"

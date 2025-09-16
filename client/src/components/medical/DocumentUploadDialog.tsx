@@ -1,9 +1,9 @@
 // Path: C:\Project\SMART_MED_2.0\client\src\components\medical\DocumentUploadDialog.tsx
 
-import React, { useState } from 'react';
+import { useState } from 'react';
 import { Dialog, DialogContent, DialogHeader, DialogTitle } from '@/components/ui/dialog';
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select';
-import { useFamilyMembers } from '@/hooks/useFamilyMembers';
+import { useFamilyTree } from '@/hooks/useFamilyTree';
 import { useDropzone } from 'react-dropzone';
 import { Upload, Loader2 } from 'lucide-react';
 import { Button } from '@/components/ui/button';
@@ -14,14 +14,10 @@ import DocumentProcessingStatus from './DocumentProcessingStatus';
 interface DocumentUploadDialogProps {
     isOpen: boolean;
     onClose: () => void;
-    onUpload: (file: File, profileId: number, documentType: string) => Promise<void>;
+    onUpload: (file: File, profileId: string, documentType: string) => Promise<void>;
 }
 
-interface FamilyMember {
-    id: number;
-    full_name: string;
-    relationship?: string;
-}
+// FamilyMember interface removed as it's not used
 
 const documentTypes = [
     { value: 'prescription', label: 'Prescription' },
@@ -39,10 +35,10 @@ export const DocumentUploadDialog: React.FC<DocumentUploadDialogProps> = ({
     const [selectedMember, setSelectedMember] = useState<string>('');
     const [documentType, setDocumentType] = useState<string>('');
     const [file, setFile] = useState<File | null>(null);
-    const { data: familyMembers, isLoading, error } = useFamilyMembers();
+    const { nodes, isLoading, error } = useFamilyTree();
     const [isUploading, setIsUploading] = useState(false);
     const [uploadProgress, setUploadProgress] = useState<number>(0);
-    const [uploadStatus, setUploadStatus] = useState<'idle' | 'uploading' | 'processing' | 'completed' | 'failed'>('idle');
+    const [uploadStatus, setUploadStatus] = useState<'idle' | 'pending' | 'processing' | 'completed' | 'failed'>('idle');
 
     const { getRootProps, getInputProps, isDragActive } = useDropzone({
         accept: {
@@ -79,7 +75,7 @@ export const DocumentUploadDialog: React.FC<DocumentUploadDialogProps> = ({
 
         try {
             setIsUploading(true);
-            setUploadStatus('uploading');
+            setUploadStatus('processing');
             setUploadProgress(0);
 
             // Simulate upload progress
@@ -93,13 +89,12 @@ export const DocumentUploadDialog: React.FC<DocumentUploadDialogProps> = ({
                 });
             }, 500);
 
-            // Convert selectedMember to number and verify it's valid
-            const profileId = parseInt(selectedMember);
-            if (isNaN(profileId)) {
+            // Verify selectedMember is valid
+            if (!selectedMember) {
                 throw new Error("Invalid family member selected");
             }
 
-            await onUpload(file, profileId, documentType);
+            await onUpload(file, selectedMember, documentType);
             
             clearInterval(progressInterval);
             setUploadProgress(100);
@@ -178,10 +173,9 @@ export const DocumentUploadDialog: React.FC<DocumentUploadDialogProps> = ({
                                 <SelectValue placeholder="Select family member" />
                             </SelectTrigger>
                             <SelectContent>
-                                {familyMembers?.map((member: FamilyMember) => (
-                                    <SelectItem key={member.id} value={member.id.toString()}>
-                                        {member.full_name}
-                                        {member.relationship && ` (${member.relationship})`}
+                                {nodes?.map((node) => (
+                                    <SelectItem key={node.data.profile.id} value={node.data.profile.id.toString()}>
+                                        {node.data.profile.full_name}
                                     </SelectItem>
                                 ))}
                             </SelectContent>
@@ -236,7 +230,7 @@ export const DocumentUploadDialog: React.FC<DocumentUploadDialogProps> = ({
                     {/* Upload Status */}
                     {uploadStatus !== 'idle' && (
                         <DocumentProcessingStatus
-                            status={uploadStatus}
+                            status={uploadStatus as any}
                             progress={uploadProgress}
                             error={uploadStatus === 'failed' ? "Upload failed. Please try again." : undefined}
                         />

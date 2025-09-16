@@ -1,5 +1,5 @@
 // src/components/ui/loading-spinner.tsx
-import React from 'react';
+// No React import needed for this component
 
 export const LoadingSpinner = () => {
   return (

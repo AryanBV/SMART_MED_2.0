@@ -1,6 +1,5 @@
 // File: C:\Project\SMART_MED_2.0\client\src\components\auth\ProtectedRoute.tsx
 
-import { useEffect } from 'react';
 import { Navigate, useLocation, Outlet } from 'react-router-dom';
 import { useAuth } from '@/contexts/AuthContext';
 import { LoadingSpinner } from '@/components/ui/loading-spinner';
@@ -21,7 +20,10 @@ const ProtectedRoute: React.FC<ProtectedRouteProps> = ({
     return <LoadingSpinner />;
   }
 
-  if (!isAuthenticated) {
+  // Force clear auth if user data is invalid/incomplete
+  if (!isAuthenticated || !user || !user.id || !user.email) {
+    // Clear any stale tokens
+    localStorage.removeItem('token');
     return <Navigate to="/login" state={{ from: location }} replace />;
   }
 

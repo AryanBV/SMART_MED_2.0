@@ -1,7 +1,7 @@
 // client/src/contexts/AuthContext.tsx
 import React, { createContext, useContext, useState, useEffect, useCallback } from 'react';
 import { AuthService } from '@/services/auth';
-import { AuthContextType, AuthResponse, LoginCredentials, RegisterCredentials, User } from '@/interfaces/auth';
+import { AuthContextType, LoginCredentials, RegisterCredentials, User } from '@/interfaces/auth';
 import { AUTH_ERROR_EVENT } from '@/config/axios';
 import { useNavigate } from 'react-router-dom';
 
@@ -31,8 +31,10 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children
   const validateAuth = useCallback(async () => {
     setIsLoading(true);
     const token = localStorage.getItem('token');
+    console.log('Token in localStorage:', token ? 'Present' : 'Missing');
   
     if (!token) {
+      console.log('No token found, clearing auth state');
       setIsAuthenticated(false);
       setUser(null);
       setIsLoading(false);
@@ -41,22 +43,27 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children
   
     try {
       const response = await AuthService.validateToken();
+      console.log('Auth validation response:', response);
       if (response?.user) {
         if (response.token) {
           localStorage.setItem('token', response.token);
         }
+        console.log('Setting user from validation:', response.user);
         setUser(response.user);
         setIsAuthenticated(true);
       } else {
+        console.log('No user in validation response, clearing auth');
         setIsAuthenticated(false);
         setUser(null);
         localStorage.removeItem('token');
       }
     } catch (error) {
       console.error('Error validating auth:', error);
+      // Clear all auth state on validation failure
       setIsAuthenticated(false);
       setUser(null);
       localStorage.removeItem('token');
+      console.log('Cleared invalid auth state due to validation error');
     } finally {
       setIsLoading(false);
     }
@@ -132,8 +139,9 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children
   };
 
   const updateUser = (userData: Partial<User>) => {  // Changed type to User
-    if (user) {
-      setUser({ ...user, ...userData });
+    if (userData) {
+      setUser(userData as User);
+      setIsAuthenticated(true);
     }
   };
 

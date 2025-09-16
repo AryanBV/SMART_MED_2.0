@@ -1,7 +1,7 @@
 // src/services/family.ts
 import { api } from '@/config/axios';
 import { FamilyMember, FamilyRelation, FamilyTreeData, RelationshipType } from '@/interfaces/family';
-import { ProfileFormData } from '@/interfaces/profile';
+import { ProfileFormData } from '@/interfaces/types';
 
 export const FamilyService = {
   getFamilyTree: async (): Promise<FamilyTreeData> => {
@@ -26,8 +26,8 @@ export const FamilyService = {
 
   // Modify the addSpouseRelation function
   addSpouseRelation: async (
-    spouse1Id: number,
-    spouse2Id: number,
+    spouse1Id: string | number,
+    spouse2Id: string | number,
     relationshipType: 'wife' | 'husband'
   ): Promise<FamilyRelation> => {
     try {
@@ -47,8 +47,8 @@ export const FamilyService = {
   },
 
   addFamilyRelation: async (
-    parentId: number,
-    childId: number,
+    parentId: string | number,
+    childId: string | number,
     relationshipType: RelationshipType
   ): Promise<FamilyRelation> => {
     const isSpouse = relationshipType === 'wife' || relationshipType === 'husband';
@@ -105,6 +105,25 @@ export const FamilyService = {
       return response.data;
     } catch (error) {
       console.error('Error fetching family members:', error);
+      throw error;
+    }
+  },
+
+  addFamilyMember: async (data: Omit<FamilyMember, 'id'>): Promise<FamilyMember> => {
+    try {
+      const response = await api.post<FamilyMember>('/api/family/member', data);
+      return response.data;
+    } catch (error) {
+      console.error('Error adding family member:', error);
+      throw error;
+    }
+  },
+
+  deleteFamilyMember: async (memberId: number): Promise<void> => {
+    try {
+      await api.delete(`/api/family/member/${memberId}`);
+    } catch (error) {
+      console.error('Error deleting family member:', error);
       throw error;
     }
   }

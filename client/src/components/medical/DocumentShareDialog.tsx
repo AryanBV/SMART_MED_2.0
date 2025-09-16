@@ -1,6 +1,6 @@
 // Path: C:\Project\SMART_MED_2.0\client\src\components\medical\DocumentShareDialog.tsx
 
-import React, { useState } from 'react';
+import { useState } from 'react';
 import {
   Dialog,
   DialogContent,
@@ -12,7 +12,7 @@ import {
 import { Button } from "@/components/ui/button";
 import { Badge } from "@/components/ui/badge";
 import { useProfile } from '@/hooks/useProfile';
-import { FamilyMemberDocument } from '@/interfaces/documentTypes';
+import { FamilyMemberDocument } from '@/interfaces/types';
 import { Checkbox } from "@/components/ui/checkbox";
 import { Label } from "@/components/ui/label";
 import { ScrollArea } from "@/components/ui/scroll-area";
@@ -31,7 +31,7 @@ const DocumentShareDialog = ({
   onClose,
   onShare
 }: DocumentShareDialogProps) => {
-  const { profiles, isLoading } = useProfile();
+  const { profile, loading } = useProfile();
   const [selectedProfiles, setSelectedProfiles] = useState<number[]>([]);
   const [isSharing, setIsSharing] = useState(false);
 
@@ -74,7 +74,7 @@ const DocumentShareDialog = ({
         <div className="bg-muted/50 p-3 rounded-lg space-y-2">
           <div className="flex items-center justify-between">
             <span className="text-sm font-medium">{document.file_name}</span>
-            <Badge variant={document.document_type}>
+            <Badge variant={document.document_type as any}>
               {document.document_type.replace('_', ' ')}
             </Badge>
           </div>
@@ -84,29 +84,29 @@ const DocumentShareDialog = ({
         </div>
 
         {/* Family Members List */}
-        {isLoading ? (
+        {loading ? (
           <div className="text-center py-4">Loading family members...</div>
-        ) : profiles?.length ? (
+        ) : profile ? (
           <ScrollArea className="h-[200px] rounded-md border p-4">
             <div className="space-y-4">
-              {profiles
-                .filter(profile => profile.id !== document.profile_id)
-                .map(profile => (
-                  <div key={profile.id} className="flex items-center space-x-2">
+              {[profile]
+                .filter(p => p.id !== document.profile_id.toString())
+                .map((familyProfile: any) => (
+                  <div key={familyProfile.id} className="flex items-center space-x-2">
                     <Checkbox
-                      id={`profile-${profile.id}`}
-                      checked={selectedProfiles.includes(profile.id)}
-                      onCheckedChange={() => toggleProfile(profile.id)}
+                      id={`profile-${familyProfile.id}`}
+                      checked={selectedProfiles.includes(parseInt(familyProfile.id))}
+                      onCheckedChange={() => toggleProfile(parseInt(familyProfile.id))}
                     />
                     <Label
-                      htmlFor={`profile-${profile.id}`}
+                      htmlFor={`profile-${familyProfile.id}`}
                       className="flex items-center gap-2 text-sm cursor-pointer"
                     >
                       <User className="w-4 h-4" />
-                      {profile.full_name}
-                      {profile.relationship && (
+                      {familyProfile.full_name}
+                      {familyProfile.relationship && (
                         <Badge variant="outline" className="text-xs">
-                          {profile.relationship}
+                          {familyProfile.relationship}
                         </Badge>
                       )}
                     </Label>

@@ -7,7 +7,7 @@ const fs = require('fs').promises;
 const { DocumentProcessingError } = require('../middleware/errorHandler');
 const pdfjsLib = require('./pdfConfig');
 const medicineReferenceData = require('../../database/medicine-dataset/medicines.json');
-const db = require('../config/database');
+const { supabase } = require('../config/database');
 
 class DocumentProcessor {
     constructor() {
@@ -41,10 +41,8 @@ class DocumentProcessor {
     }
 
     async processDocument(filePath, documentId) {
-        const connection = await db.getConnection();
         try {
             console.log('Starting document processing:', documentId);
-            await connection.beginTransaction();
     
             // Extract text based on file type
             const ext = path.extname(filePath).toLowerCase();
@@ -67,54 +65,56 @@ class DocumentProcessor {
     
             if (documentId) {
                 // Get document info and profile
-                const [documentInfo] = await connection.execute(
-                    'SELECT profile_id FROM medical_documents WHERE id = ?',
-                    [documentId]
-                );
-                const profileId = documentInfo[0].profile_id;
+                const { data: documentInfo, error: docError } = await supabase
+                    .from('medical_documents')
+                    .select('profile_id')
+                    .eq('id', documentId)
+                    .single();
+                
+                if (docError) throw docError;
+                const profileId = documentInfo.profile_id;
     
                 // Save vitals to profile
                 if (vitals) {
-                    await connection.execute(
-                        `UPDATE profiles 
-                         SET blood_pressure = ?,
-                             blood_glucose = ?,
-                             hba1c = ?,
-                             updated_at = CURRENT_TIMESTAMP
-                         WHERE id = ?`,
-                        [vitals.blood_pressure, vitals.blood_glucose, vitals.hba1c, profileId]
-                    );
+                    const { error: vitalsError } = await supabase
+                        .from('profiles')
+                        .update({
+                            blood_pressure: vitals.blood_pressure,
+                            blood_glucose: vitals.blood_glucose,
+                            hba1c: vitals.hba1c,
+                            updated_at: new Date().toISOString()
+                        })
+                        .eq('id', profileId);
+                    
+                    if (vitalsError) throw vitalsError;
                 }
     
-                // Save medicines
+                // Save medicines to Supabase
                 if (medicines && medicines.length > 0) {
                     for (const medicine of medicines) {
-                        await this.saveMedicineToDatabase(connection, medicine, documentId);
+                        await this.saveMedicineToSupabase(medicine, documentId);
                     }
                 }
     
                 // Update document status
-                await connection.execute(
-                    `UPDATE medical_documents 
-                     SET processed_status = 'completed',
-                         ocr_text = ?,
-                         metadata = ?,
-                         last_processed_at = CURRENT_TIMESTAMP
-                     WHERE id = ?`,
-                    [
-                        extractedText,
-                        JSON.stringify({
+                const { error: updateError } = await supabase
+                    .from('medical_documents')
+                    .update({
+                        processed_status: 'completed',
+                        ocr_text: extractedText,
+                        metadata: JSON.stringify({
                             patientInfo,
                             vitals,
                             medicines,
                             extractedAt: new Date().toISOString()
                         }),
-                        documentId
-                    ]
-                );
+                        last_processed_at: new Date().toISOString()
+                    })
+                    .eq('id', documentId);
+                
+                if (updateError) throw updateError;
             }
     
-            await connection.commit();
             console.log('Document processing completed successfully');
     
             return {
@@ -127,13 +127,10 @@ class DocumentProcessor {
     
         } catch (error) {
             console.error('Document processing error:', error);
-            await connection.rollback();
             if (documentId) {
-                await this.updateProcessingStatus(connection, documentId, 'failed', error.message);
+                await this.updateProcessingStatusSupabase(documentId, 'failed', error.message);
             }
             throw error;
-        } finally {
-            connection.release();
         }
     }
 
@@ -205,8 +202,8 @@ async extractMedicineInfo(text) {
             for (const refMedicine of this.medicineReference) {
                 if (this.isMedicineMatch(medicineName, refMedicine)) {
                     const medicine = {
-                        medicine_name: refMedicine.brandName,
-                        generic_name: refMedicine.genericName,
+                        medicine_name: refMedicine.name,
+                        generic_name: refMedicine.generic_name,
                         medicine_category: refMedicine.category,
                         dosage: dosage,
                         frequency: this.extractFrequency(prescriptionText),
@@ -232,19 +229,29 @@ async extractMedicineInfo(text) {
 
 // Add this helper method
 isMedicineMatch(extractedName, reference) {
-    const normalize = (str) => str.toLowerCase().replace(/[^a-z0-9]/g, '');
+    const normalize = (str) => str ? str.toLowerCase().replace(/[^a-z0-9]/g, '') : '';
     const extractedNorm = normalize(extractedName);
     
-    // Check brand name
-    if (normalize(reference.brandName).includes(extractedNorm) || 
-        extractedNorm.includes(normalize(reference.brandName))) {
+    // Check main name
+    if (normalize(reference.name).includes(extractedNorm) || 
+        extractedNorm.includes(normalize(reference.name))) {
         return true;
     }
     
     // Check generic name
-    if (normalize(reference.genericName).includes(extractedNorm) || 
-        extractedNorm.includes(normalize(reference.genericName))) {
+    if (normalize(reference.generic_name).includes(extractedNorm) || 
+        extractedNorm.includes(normalize(reference.generic_name))) {
         return true;
+    }
+    
+    // Check brand names array
+    if (reference.brand_names && Array.isArray(reference.brand_names)) {
+        for (const brandName of reference.brand_names) {
+            if (normalize(brandName).includes(extractedNorm) || 
+                extractedNorm.includes(normalize(brandName))) {
+                return true;
+            }
+        }
     }
     
     return false;
@@ -324,25 +331,25 @@ extractDuration(text) {
     return null;
 }
 
-async saveMedicineToDatabase(connection, medicine, documentId) {
-    const [result] = await connection.execute(
-        `INSERT INTO extracted_medicines 
-        (document_id, medicine_name, generic_name, medicine_category,
-         dosage, frequency, duration, instructions, confidence_score)
-        VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?)`,
-        [
-            documentId,
-            medicine.medicine_name,
-            medicine.generic_name,
-            medicine.medicine_category,
-            medicine.dosage,
-            medicine.frequency || null,
-            medicine.duration || null,
-            medicine.instructions || null,
-            medicine.confidence_score || 0.8
-        ]
-    );
-    return result.insertId;
+async saveMedicineToSupabase(medicine, documentId) {
+    const { data, error } = await supabase
+        .from('extracted_medicines')
+        .insert({
+            document_id: documentId,
+            medicine_name: medicine.medicine_name,
+            generic_name: medicine.generic_name,
+            medicine_category: medicine.medicine_category,
+            dosage: medicine.dosage,
+            frequency: medicine.frequency || null,
+            duration: medicine.duration || null,
+            instructions: medicine.instructions || null,
+            confidence_score: medicine.confidence_score || 0.8
+        })
+        .select()
+        .single();
+    
+    if (error) throw error;
+    return data.id;
 }
 
   findMedicineNameInLine(line) {
@@ -602,19 +609,21 @@ async extractPatientInfo(text) {
   }
 }
 
-async saveVitalsToDatabase(connection, vitals, profileId) {
+async saveVitalsToSupabase(vitals, profileId) {
   if (!vitals) return;
 
   try {
-      await connection.execute(
-          `UPDATE profiles 
-           SET blood_pressure = ?,
-               blood_glucose = ?,
-               hba1c = ?,
-               updated_at = CURRENT_TIMESTAMP
-           WHERE id = ?`,
-          [vitals.blood_pressure, vitals.blood_glucose, vitals.hba1c, profileId]
-      );
+      const { error } = await supabase
+          .from('profiles')
+          .update({
+              blood_pressure: vitals.blood_pressure,
+              blood_glucose: vitals.blood_glucose,
+              hba1c: vitals.hba1c,
+              updated_at: new Date().toISOString()
+          })
+          .eq('id', profileId);
+      
+      if (error) throw error;
   } catch (error) {
       console.error('Error saving vitals:', error);
       throw error;
@@ -622,16 +631,18 @@ async saveVitalsToDatabase(connection, vitals, profileId) {
 }
 
 
-async updateProcessingStatus(connection, documentId, status, errorMessage = null) {
+async updateProcessingStatusSupabase(documentId, status, errorMessage = null) {
   try {
-      await connection.execute(
-          `UPDATE medical_documents 
-           SET processed_status = ?,
-               processing_error = ?,
-               last_processed_at = CURRENT_TIMESTAMP
-           WHERE id = ?`,
-          [status, errorMessage, documentId]
-      );
+      const { error } = await supabase
+          .from('medical_documents')
+          .update({
+              processed_status: status,
+              processing_error: errorMessage,
+              last_processed_at: new Date().toISOString()
+          })
+          .eq('id', documentId);
+      
+      if (error) throw error;
   } catch (error) {
       console.error('Error updating processing status:', error);
       throw error;

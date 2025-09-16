@@ -11,11 +11,7 @@ const CreateProfilePage: React.FC = () => {
   const { createProfile, isLoading } = useProfileCreation();
 
   const handleProfileCreation = async (data: CreateProfileSchema) => {
-    createProfile(data, {
-      onSuccess: () => {
-        navigate('/dashboard');
-      }
-    });
+    await createProfile(data);
   };
 
   return (

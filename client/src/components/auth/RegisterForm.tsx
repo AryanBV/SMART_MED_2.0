@@ -61,7 +61,7 @@ const RegisterForm: React.FC = () => {
   const onSubmit = async (data: RegisterCredentials) => {
     try {
       setIsLoading(true);
-      const response = await register(data);
+      await register(data);
       
       toast({
         title: "Account created successfully",

@@ -15,13 +15,13 @@ require('dotenv').config();
 const app = express();
 
 // Database
-const db = require('./config/database');
+const { supabase } = require('./config/database');
 
 // Middleware Section
 app.use(cors({
   origin: process.env.NODE_ENV === 'production' 
-    ? 'your-production-domain' 
-    : 'http://localhost:3000',
+    ? process.env.FRONTEND_URL || ['https://your-vercel-app.vercel.app']
+    : ['http://localhost:3000', 'http://localhost:3001', 'http://localhost:3002'],
   credentials: true,
   methods: ['GET', 'POST', 'PUT', 'DELETE', 'PATCH', 'OPTIONS'],
   allowedHeaders: ['Content-Type', 'Authorization'],
@@ -53,17 +53,7 @@ app.use('/uploads', express.static(path.join(__dirname, '../uploads'), {
 }));
 app.use(express.static('public'));
 
-// Test database connection
-const testConnection = async () => {
- try {
-   await db.query('SELECT 1');
-   console.log('Database connection successful');
- } catch (error) {
-   console.error('Database connection failed:', error);
- }
-};
-
-testConnection();
+// Database connection test is handled in database.js
 
 // Basic Routes
 app.get('/', (req, res) => {

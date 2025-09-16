@@ -4,8 +4,7 @@ import { isAxiosError } from 'axios';
 import { 
   LoginCredentials, 
   RegisterCredentials, 
-  AuthResponse, 
-  AuthError
+  AuthResponse
 } from '@/interfaces/auth';
 
 import { API_ENDPOINTS } from '@/constants/api';
@@ -13,8 +12,12 @@ import { API_ENDPOINTS } from '@/constants/api';
 export class AuthService {
   static async login(credentials: LoginCredentials): Promise<AuthResponse> {
     try {
-      const response = await api.post<AuthResponse>(API_ENDPOINTS.AUTH.LOGIN, credentials);
-      return response.data;
+      const response = await api.post<{status: string, data: any}>(API_ENDPOINTS.AUTH.LOGIN, credentials);
+      return {
+        user: response.data.data.user,
+        token: response.data.data.token,
+        message: response.data.message
+      };
     } catch (error) {
       throw this.handleError(error);
     }
@@ -22,8 +25,12 @@ export class AuthService {
 
   static async register(credentials: RegisterCredentials): Promise<AuthResponse> {
     try {
-      const response = await api.post<AuthResponse>(API_ENDPOINTS.AUTH.REGISTER, credentials);
-      return response.data;
+      const response = await api.post<{status: string, data: any}>(API_ENDPOINTS.AUTH.REGISTER, credentials);
+      return {
+        user: response.data.data.user,
+        token: response.data.data.token,
+        message: response.data.message
+      };
     } catch (error) {
       console.error('Registration error details:', error);
       throw this.handleError(error);
@@ -41,8 +48,32 @@ export class AuthService {
 
   static async validateToken(): Promise<AuthResponse | null> {
     try {
-      const response = await api.get<AuthResponse>('/api/auth/validate');
-      return response.data;
+      console.log('Making token validation request...');
+      const response = await api.get<{status: string, data: {user: any}}>('/api/auth/validate');
+      console.log('Raw validation response:', response.data);
+      
+      if (!response.data || !response.data.data || !response.data.data.user) {
+        console.log('Invalid response structure, clearing token and returning null');
+        localStorage.removeItem('token');
+        return null;
+      }
+      
+      const user = response.data.data.user;
+      if (!user.id || !user.email) {
+        console.log('Invalid user data, clearing token and returning null');
+        localStorage.removeItem('token');
+        return null;
+      }
+      
+      // Transform the server response to match our AuthResponse interface
+      const authResponse = {
+        user: response.data.data.user,
+        token: '', // Token is already stored
+        message: response.data.status
+      } as AuthResponse;
+      
+      console.log('Transformed auth response:', authResponse);
+      return authResponse;
     } catch (error) {
       console.error('Token validation failed:', error);
       localStorage.removeItem('token'); // Clear invalid token

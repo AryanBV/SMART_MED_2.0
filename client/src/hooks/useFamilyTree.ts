@@ -26,8 +26,8 @@ import {
 import { useToast } from '@/components/ui/use-toast';
 
 interface RelationshipData {
-  primaryParentId: number;
-  secondaryParentId?: number;
+  primaryParentId: string | number;
+  secondaryParentId?: string | number;
   relationshipType: RelationshipType;
 }
 
@@ -103,20 +103,30 @@ export const useFamilyTree = () => {
       .filter(edge => 
         edge.target === memberId && 
         edge.data?.relationship !== 'wife' && 
-        edge.data?.relationship !== 'husband'
+        edge.data?.relationship !== 'husband' &&
+        edge.data?.relationship !== 'sibling'
       )
       .map(edge => nodes.find(node => node.id === edge.source))
       .filter((node): node is Node<NodeData> => !!node)
+      .filter((node, index, self) => 
+          // Remove duplicates based on profile ID
+          index === self.findIndex(n => n.data.profile.id === node.data.profile.id)
+      )
       .map(node => node.data.profile);
 
     const children = edges
       .filter(edge => 
         edge.source === memberId && 
         edge.data?.relationship !== 'wife' && 
-        edge.data?.relationship !== 'husband'
+        edge.data?.relationship !== 'husband' &&
+        edge.data?.relationship !== 'sibling'
       )
       .map(edge => nodes.find(node => node.id === edge.target))
       .filter((node): node is Node<NodeData> => !!node)
+      .filter((node, index, self) => 
+          // Remove duplicates based on profile ID
+          index === self.findIndex(n => n.data.profile.id === node.data.profile.id)
+      )
       .map(node => node.data.profile);
 
       const spouses = edges
@@ -133,30 +143,26 @@ export const useFamilyTree = () => {
       })
       .filter((node): node is Node<NodeData> => !!node)
       .filter((node, index, self) => 
-          // Remove duplicates based on ID
+          // Remove duplicates based on profile ID
           index === self.findIndex(n => n.data.profile.id === node.data.profile.id)
       )
       .map(node => node.data.profile);
 
-    const siblings = nodes
-      .filter(node => {
-        if (node.id === memberId) return false;
-        const nodeParents = edges
-          .filter(edge => 
-            edge.target === node.id && 
-            edge.data?.relationship !== 'wife' && 
-            edge.data?.relationship !== 'husband'
-          )
-          .map(edge => edge.source);
-        const memberParents = edges
-          .filter(edge => 
-            edge.target === memberId && 
-            edge.data?.relationship !== 'wife' && 
-            edge.data?.relationship !== 'husband'
-          )
-          .map(edge => edge.source);
-        return nodeParents.some(parentId => memberParents.includes(parentId));
+    const siblings = edges
+      .filter(edge => 
+        edge.data?.relationship === 'sibling' &&
+        (edge.source === memberId || edge.target === memberId)
+      )
+      .map(edge => {
+        // Get the other sibling's ID
+        const siblingId = edge.source === memberId ? edge.target : edge.source;
+        return nodes.find(node => node.id === siblingId);
       })
+      .filter((node): node is Node<NodeData> => !!node)
+      .filter((node, index, self) => 
+          // Remove duplicates based on profile ID
+          index === self.findIndex(n => n.data.profile.id === node.data.profile.id)
+      )
       .map(node => node.data.profile);
 
     return { parents, children, siblings, spouses };
@@ -187,8 +193,11 @@ export const useFamilyTree = () => {
 
             if (isSpouseRelation) {
               const isWife = relationshipData.relationshipType === 'wife';
+              // Wife should be on the right (+), husband on the left (-)  
+              // When adding a wife, she goes to the right of the existing node (husband)
+              // When adding a husband, he goes to the left of the existing node (wife)
               initialPosition = {
-                  x: parentNode.position.x + (isWife ? 1 : -1) * (SPOUSE_GAP + MIN_NODE_WIDTH),
+                  x: parentNode.position.x + (isWife ? (SPOUSE_GAP + MIN_NODE_WIDTH) : -(SPOUSE_GAP + MIN_NODE_WIDTH)),
                   y: parentNode.position.y
               };
           } else {
@@ -245,13 +254,7 @@ export const useFamilyTree = () => {
         );
       }
 
-      const newNodes = [...nodes, newNode];
-      const newEdges = newEdge ? [...edges, newEdge] : edges;
-
-      const layoutedNodes = calculateTreeLayout(newNodes, newEdges);
-      setNodes(layoutedNodes);
-      setEdges(newEdges);
-
+      // Refresh the entire family tree to get updated relationships
       await loadFamilyTree();
 
       return newMember;
@@ -322,8 +325,8 @@ export const useFamilyTree = () => {
       };
 
       await FamilyService.addFamilyRelation(
-        Number(connection.source),
-        Number(connection.target),
+        connection.source,
+        connection.target,
         'son'
       );
 

@@ -20,8 +20,8 @@ const auth = async (req, res, next) => {
     try {
       const decoded = jwt.verify(token, process.env.JWT_SECRET);
       console.log('Decoded token user:', { 
-        profileId: decoded.profileId,
-        role: decoded.role 
+        userId: decoded.userId,
+        email: decoded.email 
       }); // Log only necessary info
       req.user = decoded;
       next();

@@ -29,5 +29,18 @@ export default defineConfig({
         // Removed the rewrite rule since we want to keep the /api prefix
       }
     }
+  },
+  build: {
+    outDir: 'dist',
+    sourcemap: false,
+    rollupOptions: {
+      output: {
+        manualChunks: {
+          vendor: ['react', 'react-dom'],
+          ui: ['@radix-ui/react-dialog', '@radix-ui/react-dropdown-menu'],
+          utils: ['axios', 'date-fns', 'zod']
+        }
+      }
+    }
   }
 })

@@ -24,8 +24,8 @@ import { useToast } from "@/components/ui/use-toast";
 import { RelationshipType } from "@/interfaces/family";
 
 interface RelationshipData {
-  primaryParentId: number;
-  secondaryParentId?: number;
+  primaryParentId: string | number;
+  secondaryParentId?: string | number;
   relationshipType: RelationshipType;
 }
 
@@ -77,8 +77,8 @@ export function AddFamilyMemberDialog({
       };
 
       const relationshipData = primaryParentId ? {
-        primaryParentId: parseInt(primaryParentId),
-        secondaryParentId: secondaryParentId ? parseInt(secondaryParentId) : undefined,
+        primaryParentId: primaryParentId,
+        secondaryParentId: secondaryParentId || undefined,
         relationshipType: relationshipType
       } : undefined;
 

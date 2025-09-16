@@ -65,7 +65,6 @@ const DocumentProcessingStatus: React.FC<DocumentProcessingStatusProps> = ({
         <Progress 
           value={progress} 
           className="h-2"
-          indicatorClassName={progress === 100 ? 'bg-green-500' : undefined}
         />
       )}
     </div>

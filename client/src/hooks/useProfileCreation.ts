@@ -1,34 +1,61 @@
-// File: /client/src/hooks/useProfileCreation.ts
-
-import { useMutation } from '@tanstack/react-query';
-import { CreateProfileSchema } from '@/validations/profileSchemas';
-import { ProfileService } from '@/services/profile';
+// Hook for profile creation functionality
+import { useState } from 'react';
+import { useNavigate } from 'react-router-dom';
 import { useToast } from '@/components/ui/use-toast';
+import { useAuth } from '@/contexts/AuthContext';
+import { ProfileService } from '@/services/profile';
+import type { ProfileFormData } from '@/interfaces/types';
 
 export const useProfileCreation = () => {
+  const [isLoading, setIsLoading] = useState(false);
+  const [error, setError] = useState<string | null>(null);
+  const navigate = useNavigate();
   const { toast } = useToast();
+  const { user, updateUser } = useAuth();
 
-  const { mutate: createProfile, isLoading } = useMutation({
-    mutationFn: (data: CreateProfileSchema) => ProfileService.createProfile(data),
-    onSuccess: () => {
+  const createProfile = async (data: ProfileFormData) => {
+    try {
+      setIsLoading(true);
+      setError(null);
+      
+      const profile = await ProfileService.createProfile(data);
+      
+      // Update the user context with the new profile information
+      if (user && profile.id) {
+        updateUser({
+          ...user,
+          profileId: profile.id
+        });
+      }
+      
       toast({
-        title: 'Success',
-        description: 'Profile created successfully.',
+        title: "Success",
+        description: "Profile created successfully",
       });
-    },
-    onError: (error: Error) => {
+      
+      // Navigate to dashboard or appropriate page
+      navigate('/dashboard');
+      
+      return profile;
+    } catch (err: any) {
+      const errorMessage = err.message || 'Failed to create profile';
+      setError(errorMessage);
+      
       toast({
-        title: 'Error',
-        description: error.message || 'Failed to create profile',
-        variant: 'destructive',
+        title: "Error",
+        description: errorMessage,
+        variant: "destructive",
       });
-    },
-  });
+      
+      throw err;
+    } finally {
+      setIsLoading(false);
+    }
+  };
 
   return {
     createProfile,
     isLoading,
+    error
   };
 };
-
-export default useProfileCreation;

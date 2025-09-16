@@ -3,7 +3,6 @@ import {
   ConnectionLineComponentProps, 
   getStraightPath, 
   getSmoothStepPath,
-  Position,
   MarkerType 
 } from 'reactflow';
 
@@ -23,8 +22,20 @@ export function CustomConnectionLine({
   connectionStatus,
   data
 }: CustomConnectionLineProps) {
-  let edgePath = '';
   const isSpouseRelationship = data?.relationship === 'wife' || data?.relationship === 'husband';
+  const isChildRelationship = data?.relationship === 'son' || data?.relationship === 'daughter';
+
+  const createParentChildPath = (sourceX: number, sourceY: number, targetX: number, targetY: number) => {
+    // Create a path that goes down from parent, then horizontally, then down to child
+    const midY = sourceY + (targetY - sourceY) * 0.7;
+    
+    return `M ${sourceX} ${sourceY} 
+            L ${sourceX} ${midY} 
+            L ${targetX} ${midY} 
+            L ${targetX} ${targetY}`;
+  };
+
+  let edgePath = '';
 
   if (isSpouseRelationship) {
     // Use straight lines for spouse relationships
@@ -34,8 +45,11 @@ export function CustomConnectionLine({
       targetX: toX,
       targetY: toY,
     });
+  } else if (isChildRelationship) {
+    // Use custom parent-child path
+    edgePath = createParentChildPath(fromX, fromY, toX, toY);
   } else {
-    // Use smooth step for parent-child relationships
+    // Use smooth step for other relationships
     [edgePath] = getSmoothStepPath({
       sourceX: fromX,
       sourceY: fromY,
@@ -56,7 +70,9 @@ export function CustomConnectionLine({
           stroke: connectionStatus === 'valid'
             ? isSpouseRelationship
               ? '#FF69B4' // Pink for spouse relationships
-              : '#2563eb' // Blue for parent-child relationships
+              : isChildRelationship
+              ? '#2563eb' // Blue for parent-child relationships
+              : '#2563eb' // Blue for other relationships
             : connectionStatus === 'invalid'
             ? '#ef4444' // Red for invalid connections
             : '#94a3b8', // Gray for connecting state
@@ -64,7 +80,7 @@ export function CustomConnectionLine({
           transition: 'stroke 0.2s ease',
         }}
         d={edgePath}
-        markerEnd={connectionStatus === 'valid' ? `url(#${MarkerType.Arrow})` : undefined}
+        markerEnd={connectionStatus === 'valid' && !isSpouseRelationship ? `url(#${MarkerType.Arrow})` : undefined}
       />
       {connectionStatus === 'invalid' && (
         <circle

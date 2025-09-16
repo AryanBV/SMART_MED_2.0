@@ -10,7 +10,7 @@ import { Skeleton } from '@/components/ui/skeleton';
 import { AlertCircle, RefreshCw } from 'lucide-react';
 import { Alert, AlertDescription } from '@/components/ui/alert';
 import ExtractedData from '@/components/medical/ExtractedData';
-import type { FamilyMemberHealth } from '@/interfaces/dashboard';
+import type { FamilyMemberHealth } from '@/interfaces/types';
 
 const DashboardPage = () => {
   const { 
@@ -18,7 +18,10 @@ const DashboardPage = () => {
     isLoading, 
     error, 
     refetch,
-    processDocument 
+    processDocument,
+    statistics,
+    familyMembers,
+    recentActivity
   } = useDashboardData();
 
   const [selectedMember, setSelectedMember] = React.useState<FamilyMemberHealth | null>(null);
@@ -100,37 +103,37 @@ const DashboardPage = () => {
         </Button>
       </div>
 
-      {/* Stats Overview */}
+      {/* Medical Summary Stats */}
       <div className="grid grid-cols-1 md:grid-cols-4 gap-4">
         <Card>
           <CardContent className="pt-4">
             <div className="text-sm font-medium text-gray-500">Family Members</div>
             <div className="text-2xl font-bold">
-              {dashboardData.statistics.totalFamilyMembers || 0}
+              {statistics.totalFamilyMembers || 0}
             </div>
           </CardContent>
         </Card>
         <Card>
           <CardContent className="pt-4">
-            <div className="text-sm font-medium text-gray-500">Documents</div>
+            <div className="text-sm font-medium text-gray-500">Medical Documents</div>
             <div className="text-2xl font-bold">
-              {dashboardData.statistics.totalDocuments || 0}
+              {statistics.totalDocuments || 0}
             </div>
           </CardContent>
         </Card>
         <Card>
           <CardContent className="pt-4">
-            <div className="text-sm font-medium text-gray-500">Appointments</div>
+            <div className="text-sm font-medium text-gray-500">Recent Prescriptions</div>
             <div className="text-2xl font-bold">
-              {dashboardData.statistics.pendingAppointments || 0}
+              {statistics.recentPrescriptions || 0}
             </div>
           </CardContent>
         </Card>
         <Card>
           <CardContent className="pt-4">
-            <div className="text-sm font-medium text-gray-500">Active Alerts</div>
+            <div className="text-sm font-medium text-gray-500">Active Medications</div>
             <div className="text-2xl font-bold">
-              {dashboardData.statistics.activeAlerts || 0}
+              {statistics.activeMedications || 0}
             </div>
           </CardContent>
         </Card>
@@ -138,9 +141,37 @@ const DashboardPage = () => {
 
       {/* Family Health Overview */}
       <FamilyHealthOverview 
-        members={dashboardData.familyMembers || []}
+        members={familyMembers || []}
         onMemberSelect={setSelectedMember}
       />
+
+      {/* Recent Activity Timeline */}
+      <Card>
+        <CardContent className="pt-4">
+          <h2 className="text-lg font-semibold mb-4">Recent Medical Activity</h2>
+          {recentActivity && recentActivity.length > 0 ? (
+            <div className="space-y-3">
+              {recentActivity.slice(0, 5).map((activity, index) => (
+                <div key={index} className="flex items-center gap-3 p-3 bg-gray-50 rounded-lg">
+                  <div className="w-2 h-2 bg-blue-500 rounded-full"></div>
+                  <div className="flex-1">
+                    <div className="text-sm font-medium">{activity.memberName}</div>
+                    <div className="text-sm text-gray-600">{activity.action}</div>
+                  </div>
+                  <div className="text-xs text-gray-400">
+                    {activity.timestamp ? new Date(activity.timestamp).toLocaleDateString() : 'Recently'}
+                  </div>
+                </div>
+              ))}
+            </div>
+          ) : (
+            <div className="text-center py-8 text-gray-500">
+              <p>No recent medical activity found.</p>
+              <p className="text-sm mt-2">Upload documents or add family members to see activity here.</p>
+            </div>
+          )}
+        </CardContent>
+      </Card>
 
       {/* Member Details Dialog */}
       <Dialog open={!!selectedMember} onOpenChange={() => setSelectedMember(null)}>

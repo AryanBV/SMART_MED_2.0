@@ -1,13 +1,10 @@
 // Path: C:\Project\SMART_MED_2.0\client\src\components\medical\DocumentCard.tsx
 
-import React, { useState } from 'react';
+import React from 'react';
 import { Card, CardContent } from '@/components/ui/card';
 import { Button } from '@/components/ui/button';
 import { Badge } from '@/components/ui/badge';
-import { useMedicationUpdates } from '@/hooks/useMedicationUpdates';
 import { useToast } from '@/components/ui/use-toast';
-import DocumentViewer from './DocumentViewer';
-import { useDocumentProcessing } from '@/hooks/useDocumentProcessing';
 import {
   AlertTriangle,
   FileText,
@@ -26,7 +23,7 @@ import {
   TooltipProvider,
   TooltipTrigger,
 } from "@/components/ui/tooltip";
-import type { FamilyMemberDocument } from '@/interfaces/documentTypes';
+import type { FamilyMemberDocument } from '@/interfaces/types';
 
 interface DocumentCardProps {
   document: FamilyMemberDocument;
@@ -46,9 +43,6 @@ const DocumentCard: React.FC<DocumentCardProps> = ({
   showOwner = true
 }) => {
   const { toast } = useToast();
-  const [isViewerOpen, setIsViewerOpen] = useState(false);
-  const { updateMedications, isUpdating } = useMedicationUpdates(document.profile_id);
-  const { processedData, isProcessing, processDocument } = useDocumentProcessing(document.id);
 
   const formatFileSize = (bytes: number) => {
     if (bytes === 0) return '0 Bytes';
@@ -84,9 +78,9 @@ const DocumentCard: React.FC<DocumentCardProps> = ({
   const handleProcessing = async () => {
     try {
       if (document.document_type === 'prescription') {
-        await updateMedications(document.id);
+        // TODO: Update medications
       }
-      await processDocument();
+      // TODO: Process document
       await onRetryProcessing(document.id);
       toast({
         title: "Success",
@@ -102,7 +96,6 @@ const DocumentCard: React.FC<DocumentCardProps> = ({
   };
 
   const handleView = () => {
-    setIsViewerOpen(true);
     onView(document);
   };
 
@@ -234,10 +227,10 @@ const DocumentCard: React.FC<DocumentCardProps> = ({
                 size="sm"
                 className="flex items-center gap-1"
                 onClick={handleProcessing}
-                disabled={isUpdating || isProcessing}
+                disabled={false}
               >
-                <RefreshCw className={`w-4 h-4 ${(isUpdating || isProcessing) ? 'animate-spin' : ''}`} />
-                {isUpdating || isProcessing ? 'Processing...' : 'Retry'}
+                <RefreshCw className="w-4 h-4" />
+                Retry
               </Button>
             )}
 
@@ -245,7 +238,17 @@ const DocumentCard: React.FC<DocumentCardProps> = ({
               variant="outline"
               size="sm"
               className="flex items-center gap-1"
-              onClick={() => window.open(`/api/documents/${document.id}/download`, '_blank')}
+              onClick={() => {
+                const token = localStorage.getItem('token');
+                const baseUrl = import.meta.env.VITE_API_URL || 'http://localhost:5000';
+                const downloadUrl = `${baseUrl}/api/documents/${document.id}/download${token ? `?token=${token}` : ''}`;
+                const link = document.createElement('a');
+                link.href = downloadUrl;
+                link.download = document.file_name || 'document';
+                document.body.appendChild(link);
+                link.click();
+                document.body.removeChild(link);
+              }}
             >
               <Download className="w-4 h-4" />
               Download
@@ -266,14 +269,6 @@ const DocumentCard: React.FC<DocumentCardProps> = ({
         </CardContent>
       </Card>
 
-      <DocumentViewer
-        document={document}
-        processedData={processedData}
-        isOpen={isViewerOpen}
-        onClose={() => setIsViewerOpen(false)}
-        onRetryProcessing={handleProcessing}
-        isProcessing={isProcessing || isUpdating}
-      />
     </>
   );
 };

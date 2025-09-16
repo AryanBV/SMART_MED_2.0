@@ -1,113 +1,134 @@
 // Path: /server/models/Document.js
 
-const db = require('../config/database');
+const { supabase } = require('../config/database');
 
 class Document {
     static async findByProfileId(profileId) {
-        const [rows] = await db.execute(`
-            SELECT d.*, 
-                   p.full_name as owner_name,
-                   r.relationship_type as relationship,
-                   CASE 
-                     WHEN d.profile_id = ? THEN 'admin'
-                     WHEN r.relationship_type IN ('parent', 'guardian') THEN 'write'
-                     ELSE 'read'
-                   END as access_level
-            FROM medical_documents d
-            LEFT JOIN profiles p ON d.profile_id = p.id
-            LEFT JOIN family_relations r ON (
-                (r.parent_profile_id = ? AND r.child_profile_id = d.profile_id)
-                OR (r.child_profile_id = ? AND r.parent_profile_id = d.profile_id)
-            )
-            WHERE d.profile_id = ?
-               OR (r.relationship_type IS NOT NULL AND d.is_archived = false)
-            ORDER BY d.created_at DESC
-        `, [profileId, profileId, profileId, profileId]);
+        const { data: documents, error } = await supabase
+            .from('medical_documents')
+            .select(`
+                *,
+                profiles!medical_documents_profile_id_fkey(full_name)
+            `)
+            .or(`profile_id.eq.${profileId}`)
+            .eq('is_archived', false)
+            .order('created_at', { ascending: false });
         
-        return rows;
+        if (error) {
+            throw error;
+        }
+        
+        // Format the response to include access_level and owner_name
+        return documents.map(doc => ({
+            ...doc,
+            owner_name: doc.profiles?.full_name,
+            access_level: doc.profile_id === profileId ? 'admin' : 'read'
+        }));
     }
 
 
     static async create(documentData) {
-        const [result] = await db.execute(
-            `INSERT INTO medical_documents 
-            (profile_id, owner_profile_id, original_owner_id, file_name, file_path, 
-             file_type, file_size, mime_type, document_type, access_level, uploaded_by)
-            VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)`,
-            [
-                documentData.profileId,         // The selected family member
-                documentData.ownerProfileId,    // The logged-in user's profile
-                documentData.ownerProfileId,    // Original owner (logged-in user)
-                documentData.fileName,
-                documentData.filePath,
-                documentData.fileType,
-                documentData.fileSize,
-                documentData.mimeType,
-                documentData.documentType,
-                'family',                       // Set default access level to family
-                documentData.ownerProfileId     // Uploaded by logged-in user
-            ]
-        );
-        return result.insertId;
+        const { data: document, error } = await supabase
+            .from('medical_documents')
+            .insert({
+                profile_id: documentData.profileId,
+                owner_profile_id: documentData.ownerProfileId,
+                original_owner_id: documentData.ownerProfileId,
+                file_name: documentData.fileName,
+                file_path: documentData.filePath,
+                file_type: documentData.fileType,
+                file_size: documentData.fileSize,
+                mime_type: documentData.mimeType,
+                document_type: documentData.documentType,
+                access_level: 'family',
+                uploaded_by: documentData.ownerProfileId
+            })
+            .select()
+            .single();
+        
+        if (error) {
+            throw error;
+        }
+        
+        return document.id;
     }
 
     static async findById(id, profileId) {
-        const [rows] = await db.execute(`
-            SELECT d.*, 
-                   p.full_name as owner_name,
-                   r.relationship_type as relationship,
-                   CASE 
-                     WHEN d.profile_id = ? THEN 'admin'
-                     WHEN r.relationship_type IN ('parent', 'guardian') THEN 'write'
-                     ELSE 'read'
-                   END as access_level
-            FROM medical_documents d
-            LEFT JOIN profiles p ON d.profile_id = p.id
-            LEFT JOIN family_relations r ON (
-                (r.parent_profile_id = ? AND r.child_profile_id = d.profile_id)
-                OR (r.child_profile_id = ? AND r.parent_profile_id = d.profile_id)
-            )
-            WHERE d.id = ? AND (
-                d.profile_id = ?
-                OR r.relationship_type IS NOT NULL
-            )
-        `, [profileId, profileId, profileId, id, profileId]);
+        const { data: document, error } = await supabase
+            .from('medical_documents')
+            .select(`
+                *,
+                profiles!medical_documents_profile_id_fkey(full_name)
+            `)
+            .eq('id', id)
+            .or(`profile_id.eq.${profileId},owner_profile_id.eq.${profileId}`)
+            .single();
         
-        return rows[0];
+        if (error) {
+            throw error;
+        }
+        
+        // Format the response
+        return {
+            ...document,
+            owner_name: document.profiles?.full_name,
+            access_level: document.profile_id === profileId ? 'admin' : 'read'
+        };
     }
 
     static async updateProcessingStatus(id, status, lastProcessedAt = null) {
-        await db.execute(
-            `UPDATE medical_documents 
-             SET processed_status = ?, 
-                 last_processed_at = ? 
-             WHERE id = ?`,
-            [status, lastProcessedAt || new Date(), id]
-        );
+        const { error } = await supabase
+            .from('medical_documents')
+            .update({
+                processed_status: status,
+                last_processed_at: lastProcessedAt || new Date().toISOString()
+            })
+            .eq('id', id);
+        
+        if (error) {
+            throw error;
+        }
     }
 
     static async softDelete(id, profileId) {
-        const [result] = await db.execute(
-            `UPDATE medical_documents 
-             SET is_archived = true 
-             WHERE id = ? AND profile_id = ?`,
-            [id, profileId]
-        );
-        return result.affectedRows > 0;
+        const { data, error } = await supabase
+            .from('medical_documents')
+            .update({ is_archived: true })
+            .eq('id', id)
+            .eq('profile_id', profileId)
+            .select();
+        
+        if (error) {
+            throw error;
+        }
+        
+        return data && data.length > 0;
     }
 
     static async hasAccessPermission(targetProfileId, requestingProfileId) {
-        const [rows] = await db.execute(`
-            SELECT 1 
-            FROM profiles p
-            LEFT JOIN family_relations fr ON 
-                (fr.parent_profile_id = ? AND fr.child_profile_id = ?)
-                OR (fr.child_profile_id = ? AND fr.parent_profile_id = ?)
-            WHERE p.id = ?
-            LIMIT 1`,
-            [requestingProfileId, targetProfileId, requestingProfileId, targetProfileId, targetProfileId]
-        );
-        return rows.length > 0;
+        // Check if requesting profile has access to target profile
+        const { data: profile, error: profileError } = await supabase
+            .from('profiles')
+            .select('id')
+            .eq('id', targetProfileId)
+            .single();
+        
+        if (profileError || !profile) {
+            return false;
+        }
+        
+        // Check if there's a family relationship
+        const { data: relations, error: relationError } = await supabase
+            .from('family_relations')
+            .select('id')
+            .or(`and(parent_profile_id.eq.${requestingProfileId},child_profile_id.eq.${targetProfileId}),and(child_profile_id.eq.${requestingProfileId},parent_profile_id.eq.${targetProfileId})`)
+            .limit(1);
+        
+        if (relationError) {
+            return false;
+        }
+        
+        return requestingProfileId === targetProfileId || (relations && relations.length > 0);
     }
 }
 

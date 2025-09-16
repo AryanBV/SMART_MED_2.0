@@ -5,7 +5,7 @@ import { ScrollArea } from '@/components/ui/scroll-area';
 import { Dialog, DialogContent, DialogHeader, DialogTitle } from '@/components/ui/dialog';
 import { HealthCard } from './HealthCard';
 import ExtractedData from '@/components/medical/ExtractedData';
-import type { FamilyMemberHealth } from '@/interfaces/dashboard';
+import type { FamilyMemberHealth } from '@/interfaces/types';
 import { Button } from '@/components/ui/button';
 import { X } from 'lucide-react';
 
@@ -70,7 +70,10 @@ export const FamilyHealthOverview: React.FC<FamilyHealthOverviewProps> = ({
 
           {selectedMember && (
             <ExtractedData
-            medicines={selectedMember.medications || []}
+            medicines={selectedMember.medications?.map(med => ({
+              ...med,
+              medicine_name: med.name
+            })) || []}
             rawText={selectedMember.lastDocument?.extractedText}
             showRawText={false}
             processingStatus="completed"

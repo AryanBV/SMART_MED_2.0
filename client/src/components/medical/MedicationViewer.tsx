@@ -5,7 +5,7 @@ import { Card, CardContent } from '@/components/ui/card';
 import { Badge } from '@/components/ui/badge';
 import { Pill, Clock, CalendarDays } from 'lucide-react';
 import { ScrollArea } from '@/components/ui/scroll-area';
-import type { Medication } from '@/interfaces/dashboard';
+import type { Medication } from '@/interfaces/types';
 
 interface MedicationViewerProps {
   medications: Medication[];

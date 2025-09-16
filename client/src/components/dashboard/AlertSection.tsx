@@ -1,7 +1,7 @@
 // File: client/src/components/dashboard/AlertSection.tsx
 
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card';
-import { DashboardAlert } from '@/interfaces/dashboard';
+import { DashboardAlert } from '@/interfaces/types';
 import { AlertCircle, AlertTriangle, Info } from 'lucide-react';
 
 interface AlertSectionProps {

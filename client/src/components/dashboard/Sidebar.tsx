@@ -57,7 +57,6 @@ export const Sidebar = () => {
     return user?.name?.split(' ')[0] || 'User';
   };
 
-  const isSettingsActive = location.pathname.includes('/dashboard/settings');
 
   const isExactPathMatch = (path: string) => {
     return location.pathname === path;

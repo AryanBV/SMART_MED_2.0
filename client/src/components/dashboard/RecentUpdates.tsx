@@ -2,7 +2,7 @@
 
 import { ScrollArea } from '@/components/ui/scroll-area';
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card';
-import { DashboardUpdate } from '@/interfaces/dashboard';
+import { DashboardUpdate } from '@/interfaces/types';
 import { FileText, Pill, Calendar, Activity } from 'lucide-react';
 
 interface RecentUpdatesProps {

@@ -1,6 +1,6 @@
 // Path: server/routes/documents.js
 
-const db = require('../config/database');
+const { supabase } = require('../config/database');
 const express = require('express');
 const router = express.Router();
 const documentController = require('../controllers/documentController');
@@ -9,11 +9,73 @@ const upload = require('../middleware/upload');
 const auth = require('../middleware/auth');
 const { validateDocumentUpload } = require('../middleware/validation');
 
+// Test route without auth
+router.get('/profile/:profileId/test', async (req, res, next) => {
+    try {
+        const { profileId } = req.params;
+        console.log('Getting documents for profile:', profileId);
+
+        // Get documents for this profile
+        const { data: documents, error: documentsError } = await supabase
+            .from('medical_documents')
+            .select(`
+                id,
+                file_name,
+                processed_status,
+                created_at,
+                metadata,
+                ocr_text,
+                last_processed_at
+            `)
+            .eq('profile_id', profileId)
+            .order('created_at', { ascending: false });
+
+        console.log('Documents query result:', { documents, documentsError });
+
+        if (documentsError) {
+            console.error('Supabase documents error:', documentsError);
+            throw documentsError;
+        }
+
+        // Format the response
+        const formattedDocuments = documents.map(doc => {
+            let metadata = {};
+            try {
+                metadata = doc.metadata ? JSON.parse(doc.metadata) : {};
+            } catch (err) {
+                console.error('Error parsing metadata for document:', doc.id, err);
+            }
+
+            return {
+                id: doc.id,
+                fileName: doc.file_name,
+                processedStatus: doc.processed_status,
+                createdAt: doc.created_at,
+                lastProcessedAt: doc.last_processed_at,
+                extractedText: doc.ocr_text,
+                medicines: metadata.medicines || []
+            };
+        });
+
+        console.log('Returning formatted documents:', formattedDocuments);
+        res.json(formattedDocuments);
+
+    } catch (error) {
+        console.error('Error in getProfileDocuments:', error);
+        res.status(500).json({
+            success: false,
+            message: 'Error fetching profile documents',
+            error: error.message
+        });
+    }
+});
+
 // All routes require authentication
 router.use(auth);
 
 router.get('/shared-with-me', (req, res, next) => documentController.getSharedDocuments(req, res, next));
 router.get('/family/:profileId', (req, res, next) => documentController.getFamilyDocuments(req, res, next));
+router.get('/profile/:profileId', (req, res, next) => documentController.getProfileDocuments(req, res, next));
 
 router.post('/upload', 
     upload.single('document'), 
@@ -33,99 +95,63 @@ router.get('/:id/view', (req, res, next) => {
     auth(req, res, next);
 }, (req, res, next) => documentController.viewDocument(req, res, next));
 
-router.get('/profile/:profileId', async (req, res, next) => {
-    const connection = await db.getConnection();
+router.get('/:id/download', (req, res, next) => {
+    const token = req.query.token;
+    if (token) {
+        req.headers.authorization = `Bearer ${token}`;
+    }
+    auth(req, res, next);
+}, (req, res, next) => documentController.downloadDocument(req, res, next));
+
+router.get('/profile/:profileId/test', async (req, res, next) => {
     try {
         const { profileId } = req.params;
-        
-        const [profiles] = await connection.execute(
-            `SELECT id, blood_pressure, blood_glucose, hba1c 
-             FROM profiles WHERE id = ?`,
-            [profileId]
-        );
+        console.log('Getting documents for profile:', profileId);
 
-        if (profiles.length === 0) {
-            return res.status(404).json({
-                success: false,
-                message: 'Profile not found'
-            });
+        // Get documents for this profile
+        const { data: documents, error: documentsError } = await supabase
+            .from('medical_documents')
+            .select(`
+                id,
+                file_name,
+                processed_status,
+                created_at,
+                metadata,
+                ocr_text,
+                last_processed_at
+            `)
+            .eq('profile_id', profileId)
+            .order('created_at', { ascending: false });
+
+        console.log('Documents query result:', { documents, documentsError });
+
+        if (documentsError) {
+            console.error('Supabase documents error:', documentsError);
+            throw documentsError;
         }
 
-        const [documents] = await connection.execute(
-            `SELECT 
-                md.id,
-                md.file_name,
-                md.processed_status,
-                md.created_at,
-                md.metadata,
-                md.ocr_text,
-                md.last_processed_at,
-                em.medicine_name,
-                em.dosage,
-                em.frequency,
-                em.instructions,
-                em.confidence_score
-            FROM medical_documents md
-            LEFT JOIN extracted_medicines em ON md.id = em.document_id
-            WHERE md.profile_id = ? 
-            AND md.processed_status = 'completed'
-            AND md.is_archived = false
-            ORDER BY md.created_at DESC`,
-            [profileId]
-        );
-
-        const documentMap = new Map();
-        documents.forEach(doc => {
-            if (!documentMap.has(doc.id)) {
-                let metadata = {};
-                try {
-                    metadata = doc.metadata ? JSON.parse(doc.metadata) : {};
-                } catch (err) {
-                    console.error('Error parsing metadata for document:', doc.id, err);
-                }
-
-                documentMap.set(doc.id, {
-                    id: doc.id,
-                    fileName: doc.file_name,
-                    processedStatus: doc.processed_status,
-                    createdAt: doc.created_at,
-                    lastProcessedAt: doc.last_processed_at,
-                    extractedText: doc.ocr_text,
-                    vitals: metadata.vitals || {
-                        blood_pressure: profiles[0].blood_pressure || 'N/A',
-                        blood_glucose: profiles[0].blood_glucose || 'N/A',
-                        hba1c: profiles[0].hba1c || 'N/A'
-                    },
-                    medicines: []
-                });
+        // Format the response
+        const formattedDocuments = documents.map(doc => {
+            let metadata = {};
+            try {
+                metadata = doc.metadata ? JSON.parse(doc.metadata) : {};
+            } catch (err) {
+                console.error('Error parsing metadata for document:', doc.id, err);
             }
 
-            if (doc.medicine_name) {
-                const currentDoc = documentMap.get(doc.id);
-                currentDoc.medicines.push({
-                    name: doc.medicine_name,
-                    dosage: doc.dosage,
-                    frequency: doc.frequency,
-                    instructions: doc.instructions,
-                    confidence_score: doc.confidence_score
-                });
-            }
+            return {
+                id: doc.id,
+                fileName: doc.file_name,
+                processedStatus: doc.processed_status,
+                createdAt: doc.created_at,
+                lastProcessedAt: doc.last_processed_at,
+                extractedText: doc.ocr_text,
+                medicines: metadata.medicines || []
+            };
         });
 
-        const formattedDocuments = Array.from(documentMap.values());
-
-        res.json({
-            success: true,
-            profile: {
-                id: profiles[0].id,
-                vitals: {
-                    blood_pressure: profiles[0].blood_pressure || 'N/A',
-                    blood_glucose: profiles[0].blood_glucose || 'N/A',
-                    hba1c: profiles[0].hba1c || 'N/A'
-                }
-            },
-            documents: formattedDocuments
-        });
+        console.log('Returning formatted documents:', formattedDocuments);
+        res.json(formattedDocuments);
 
     } catch (error) {
         console.error('Error in getProfileDocuments:', error);
@@ -134,10 +160,6 @@ router.get('/profile/:profileId', async (req, res, next) => {
             message: 'Error fetching profile documents',
             error: error.message
         });
-    } finally {
-        if (connection) {
-            connection.release();
-        }
     }
 });
 

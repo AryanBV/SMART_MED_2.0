@@ -1,150 +1,136 @@
 // server/controllers/documentController.js
 const path = require('path');
 const { DocumentProcessingError } = require('../middleware/errorHandler');
-const db = require('../config/database');
+const { supabase } = require('../config/database');
 const documentProcessor = require('../services/documentProcessor');
 const fs = require('fs').promises;
 const Document = require('../models/Document');
 
 class DocumentController {
     async uploadDocument(req, res, next) {
-        const connection = await db.getConnection();
-        
         try {
             if (!req.file) {
                 throw new DocumentProcessingError('No file uploaded');
             }
     
-            const targetProfileId = parseInt(req.body.profileId);
+            const targetProfileId = req.body.profileId;
             const ownerProfileId = req.user.profileId;
     
             if (!targetProfileId) {
                 throw new DocumentProcessingError('Invalid profile ID');
             }
     
-            await connection.beginTransaction();
+            // Create document record in Supabase
+            const { data: document, error } = await supabase
+                .from('medical_documents')
+                .insert({
+                    profile_id: targetProfileId,
+                    owner_profile_id: ownerProfileId,
+                    original_owner_id: ownerProfileId,
+                    file_name: req.file.originalname,
+                    file_path: req.file.path,
+                    file_type: path.extname(req.file.originalname),
+                    file_size: req.file.size,
+                    mime_type: req.file.mimetype,
+                    document_type: req.body.documentType || 'other',
+                    uploaded_by: ownerProfileId,
+                    access_level: 'family',
+                    processed_status: 'pending'
+                })
+                .select()
+                .single();
     
-            try {
-                // Create document record with correct access_level ENUM value
-                const [result] = await connection.execute(
-                    `INSERT INTO medical_documents 
-                    (profile_id, owner_profile_id, original_owner_id, file_name, 
-                     file_path, file_type, file_size, mime_type, document_type, 
-                     uploaded_by, access_level, processed_status)
-                    VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)`,
-                    [
-                        targetProfileId,
-                        ownerProfileId,
-                        ownerProfileId,
-                        req.file.originalname,
-                        req.file.path,
-                        path.extname(req.file.originalname),
-                        req.file.size,
-                        req.file.mimetype,
-                        req.body.documentType || 'other',
-                        ownerProfileId,
-                        'family',  // Using valid ENUM value: 'private', 'family', or 'shared'
-                        'pending'
-                    ]
-                );
-    
-                const documentId = result.insertId;
-    
-                await connection.commit();
-    
-                res.status(200).json({
-                    message: 'Document uploaded successfully',
-                    document: {
-                        id: documentId,
-                        filename: req.file.originalname,
-                        status: 'pending'
-                    }
-                });
-    
-            } catch (error) {
-                await connection.rollback();
-                throw error;
+            if (error) {
+                throw new DocumentProcessingError(`Database error: ${error.message}`);
             }
+    
+            res.status(200).json({
+                message: 'Document uploaded successfully',
+                document: {
+                    id: document.id,
+                    filename: req.file.originalname,
+                    status: 'pending'
+                }
+            });
     
         } catch (error) {
             console.error('Upload error:', error);
             next(error);
-        } finally {
-            connection.release();
         }
     }
 
     async getDocuments(req, res, next) {
         try {
             const profileId = req.query.profileId || req.user.profileId;
-            const [documents] = await db.execute(
-                `SELECT d.*, p.full_name as owner_name,
-                    CASE 
-                        WHEN d.profile_id = ? THEN 'admin'
-                        WHEN fr.relationship_type IN ('parent', 'guardian') THEN 'write'
-                        ELSE 'read'
-                    END as access_level
-                FROM medical_documents d
-                LEFT JOIN profiles p ON d.profile_id = p.id
-                LEFT JOIN family_relations fr ON 
-                    (fr.parent_profile_id = ? AND fr.child_profile_id = d.profile_id)
-                    OR (fr.child_profile_id = ? AND fr.parent_profile_id = d.profile_id)
-                WHERE d.is_archived = false 
-                    AND (d.profile_id = ? 
-                    OR fr.id IS NOT NULL)
-                ORDER BY d.created_at DESC`,
-                [profileId, profileId, profileId, profileId]
-            );
-            res.json(documents);
+            
+            const { data: documents, error } = await supabase
+                .from('medical_documents')
+                .select(`
+                    *,
+                    profiles!medical_documents_profile_id_fkey(full_name)
+                `)
+                .eq('is_archived', false)
+                .or(`profile_id.eq.${profileId},owner_profile_id.eq.${profileId}`)
+                .order('created_at', { ascending: false });
+    
+            if (error) {
+                throw new DocumentProcessingError(`Database error: ${error.message}`);
+            }
+    
+            // Format the response to match the expected structure
+            const formattedDocuments = documents.map(doc => ({
+                ...doc,
+                owner_name: doc.profiles?.full_name,
+                access_level: doc.profile_id === profileId ? 'admin' : 'read'
+            }));
+    
+            res.json(formattedDocuments);
         } catch (error) {
             next(error);
         }
     }
 
     async processDocument(req, res, next) {
-        const connection = await db.getConnection();
         try {
             const { id } = req.params;
             console.log('Processing document:', id);
     
             // Get document
-            const [documents] = await connection.execute(
-                `SELECT * FROM medical_documents WHERE id = ?`,
-                [id]
-            );
+            const { data: documents, error: fetchError } = await supabase
+                .from('medical_documents')
+                .select('*')
+                .eq('id', id)
+                .single();
     
-            if (!documents.length) {
+            if (fetchError || !documents) {
                 throw new DocumentProcessingError('Document not found');
             }
     
-            const document = documents[0];
-            console.log('Found document:', document.file_name);
+            console.log('Found document:', documents.file_name);
     
             // Process document and extract all data
-            const processedData = await documentProcessor.processDocument(document.file_path, id);
+            const processedData = await documentProcessor.processDocument(documents.file_path, id);
             console.log('Document processed:', processedData?.success);
     
             // Update document status
-            await connection.execute(
-                `UPDATE medical_documents 
-                 SET processed_status = 'completed',
-                     ocr_text = ?,
-                     metadata = ?,
-                     last_processed_at = CURRENT_TIMESTAMP
-                 WHERE id = ?`,
-                [
-                    processedData.text,
-                    JSON.stringify({
+            const { error: updateError } = await supabase
+                .from('medical_documents')
+                .update({
+                    processed_status: 'completed',
+                    ocr_text: processedData.text,
+                    metadata: JSON.stringify({
                         vitals: processedData.vitals,
                         medicines: processedData.medicines,
                         patientInfo: processedData.patientInfo,
                         extractedAt: new Date().toISOString()
                     }),
-                    id
-                ]
-            );
+                    last_processed_at: new Date().toISOString()
+                })
+                .eq('id', id);
     
-            await connection.commit();
+            if (updateError) {
+                throw new DocumentProcessingError(`Update error: ${updateError.message}`);
+            }
     
             res.json({
                 success: true,
@@ -157,10 +143,7 @@ class DocumentController {
     
         } catch (error) {
             console.error('Document processing error:', error);
-            await connection.rollback();
             next(error);
-        } finally {
-            connection.release();
         }
     }
 
@@ -186,23 +169,28 @@ class DocumentController {
     async viewDocument(req, res, next) {
         try {
             const { id } = req.params;
+            console.log('ViewDocument - Looking for document ID:', id);
             
-            const [documents] = await db.execute(
-                `SELECT d.*, p.full_name as owner_name
-                 FROM medical_documents d
-                 LEFT JOIN profiles p ON d.profile_id = p.id
-                 WHERE d.id = ?`,
-                [id]
-            );
+            const { data: document, error } = await supabase
+                .from('medical_documents')
+                .select(`
+                    *
+                `)
+                .eq('id', id)
+                .single();
     
-            if (!documents.length) {
+            console.log('ViewDocument - Query result:', { document: !!document, error });
+            if (document) {
+                console.log('ViewDocument - Document found:', document.file_name, 'Path:', document.file_path);
+            }
+    
+            if (error || !document) {
+                console.log('ViewDocument - Document not found, error:', error);
                 return res.status(404).json({ 
                     status: 'error',
                     message: 'Document not found'
                 });
             }
-    
-            const document = documents[0];
             
             // Normalize the file path
             const normalizedPath = document.file_path.replace(/\\/g, '/');
@@ -231,6 +219,53 @@ class DocumentController {
     
         } catch (error) {
             console.error('View document error:', error);
+            next(error);
+        }
+    }
+
+    async downloadDocument(req, res, next) {
+        try {
+            const { id } = req.params;
+            
+            const { data: document, error } = await supabase
+                .from('medical_documents')
+                .select('*')
+                .eq('id', id)
+                .single();
+    
+            if (error || !document) {
+                return res.status(404).json({ 
+                    status: 'error',
+                    message: 'Document not found'
+                });
+            }
+            
+            // Normalize the file path
+            const normalizedPath = document.file_path.replace(/\\/g, '/');
+            const relativePath = normalizedPath.split('uploads/')[1];
+            const absolutePath = path.join(__dirname, '../../uploads', relativePath);
+    
+            try {
+                await fs.access(absolutePath);
+            } catch (error) {
+                console.error('File access error:', error);
+                return res.status(404).json({
+                    status: 'error',
+                    message: 'File not found'
+                });
+            }
+    
+            // Set proper headers for download
+            res.setHeader('Access-Control-Allow-Origin', '*');
+            res.setHeader('Content-Type', document.mime_type || 'application/pdf');
+            res.setHeader('Content-Disposition', `attachment; filename="${document.file_name}"`);
+    
+            // Read file and send as binary
+            const file = await fs.readFile(absolutePath);
+            res.end(file);
+    
+        } catch (error) {
+            console.error('Download document error:', error);
             next(error);
         }
     }
@@ -744,6 +779,89 @@ class DocumentController {
           throw new Error('Failed to extract medicines');
         }
       }
+
+    // Updated method for Supabase compatibility
+    async getProfileDocuments(req, res, next) {
+        try {
+            const { profileId } = req.params;
+            const userProfileId = req.user.profileId;
+            
+            console.log('Getting documents for profile:', profileId);
+            console.log('User profile:', userProfileId);
+
+            // Get documents for the specified profile with owner information
+            const { data: documents, error } = await supabase
+                .from('medical_documents')
+                .select(`
+                    id,
+                    file_name,
+                    file_type,
+                    file_size,
+                    document_type,
+                    processed_status,
+                    created_at,
+                    updated_at,
+                    metadata,
+                    ocr_text,
+                    last_processed_at,
+                    profile_id,
+                    owner_profile_id,
+                    profiles!medical_documents_profile_id_fkey(full_name),
+                    owner_profiles:profiles!medical_documents_owner_profile_id_fkey(full_name)
+                `)
+                .eq('profile_id', profileId)
+                .eq('is_archived', false)
+                .order('created_at', { ascending: false });
+
+            if (error) {
+                console.error('Supabase query error:', error);
+                throw new DocumentProcessingError(`Database error: ${error.message}`);
+            }
+
+            console.log('Found documents:', documents?.length || 0);
+
+            // Format the response to match the expected FamilyMemberDocument interface
+            const formattedDocuments = documents.map(doc => {
+                let metadata = {};
+                try {
+                    metadata = doc.metadata ? JSON.parse(doc.metadata) : {};
+                } catch (err) {
+                    console.error('Error parsing metadata for document:', doc.id, err);
+                }
+
+                // Determine access level based on ownership and relationship
+                let accessLevel = 'read';
+                if (doc.owner_profile_id === userProfileId) {
+                    accessLevel = 'admin';
+                } else if (doc.profile_id === userProfileId) {
+                    accessLevel = 'admin';
+                }
+
+                return {
+                    id: doc.id,
+                    profile_id: doc.profile_id,
+                    file_name: doc.file_name,
+                    file_type: doc.file_type,
+                    file_size: doc.file_size,
+                    document_type: doc.document_type,
+                    processed_status: doc.processed_status,
+                    extraction_data: metadata,
+                    created_at: doc.created_at,
+                    updated_at: doc.updated_at,
+                    owner_name: doc.owner_profiles?.full_name || doc.profiles?.full_name,
+                    relationship: null, // Can be enhanced later with family relations
+                    access_level: accessLevel
+                };
+            });
+
+            console.log('Returning formatted documents:', formattedDocuments.length);
+            res.json(formattedDocuments);
+
+        } catch (error) {
+            console.error('Error in getProfileDocuments:', error);
+            next(error);
+        }
+    }
 }
 
 module.exports = new DocumentController();

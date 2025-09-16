@@ -1,20 +1,20 @@
 // File: /client/src/services/profile.ts
 
 import api from '@/config/axios';
-import type { CreateProfileSchema } from '@/validations/profileSchemas';
+import type { ProfileFormData } from '@/interfaces/types';
 import type { Profile } from '@/interfaces/profile';
 
-const createProfile = async (data: CreateProfileSchema): Promise<Profile> => {
+const createProfile = async (data: ProfileFormData): Promise<Profile> => {
   const response = await api.post<Profile>('/api/profiles', data);
   return response.data;
 };
 
-const updateProfile = async (id: string, data: Partial<CreateProfileSchema>): Promise<Profile> => {
+const updateProfile = async (id: number, data: Partial<ProfileFormData>): Promise<Profile> => {
   const response = await api.put<Profile>(`/api/profiles/${id}`, data);
   return response.data;
 };
 
-const getProfile = async (): Promise<Profile> => {
+const getCurrentProfile = async (): Promise<Profile> => {
   const response = await api.get<Profile>('/api/profiles/me');
   return response.data;
 };
@@ -45,7 +45,8 @@ const unlinkFamilyMember = async (memberId: string): Promise<void> => {
 export const ProfileService = {
   createProfile,
   updateProfile,
-  getProfile,
+  getCurrentProfile,
+  getProfile: getCurrentProfile,
   getProfileById,
   getFamilyProfiles,
   getFamilyMemberProfile,

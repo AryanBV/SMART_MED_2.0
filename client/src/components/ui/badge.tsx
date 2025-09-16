@@ -30,6 +30,8 @@ const badgeVariants = cva(
           "border-transparent bg-indigo-100 text-indigo-800 hover:bg-indigo-200",
         discharge_summary:
           "border-transparent bg-teal-100 text-teal-800 hover:bg-teal-200",
+        other:
+          "border-transparent bg-gray-100 text-gray-800 hover:bg-gray-200",
         // Add new variants for access levels
         admin:
           "border-transparent bg-emerald-100 text-emerald-800 hover:bg-emerald-200",

@@ -3,7 +3,7 @@ const router = express.Router();
 const authController = require('../controllers/authController');
 const auth = require('../middleware/auth');
 const { body } = require('express-validator');
-const db = require('../config/database'); 
+const { supabase } = require('../config/database'); 
 // Validation middleware
 const registerValidation = [
   body('email').isEmail().withMessage('Please enter a valid email'),
@@ -30,18 +30,23 @@ router.post('/register', registerValidation, authController.register);
 router.post('/login', loginValidation, authController.login);
 router.get('/validate', auth, authController.validate);
 router.post('/logout', auth, authController.logout);
+router.post('/refresh-token', authController.refreshToken);
+router.post('/google-callback', authController.googleCallback);
 
 // Only for development
 router.get('/users', async (req, res) => {
   try {
-    const [users] = await db.query('SELECT id, email, name, role, created_at FROM users');
-    // Remove password from results for security
+    const { data: users, error } = await supabase
+      .from('users')
+      .select('id, email, name, role, created_at');
+      
+    if (error) {
+      throw error;
+    }
+    
     res.json({ 
       status: 'success', 
-      data: users.map(user => ({
-        ...user,
-        password: undefined
-      }))
+      data: users
     });
   } catch (error) {
     console.error('Error fetching users:', error);

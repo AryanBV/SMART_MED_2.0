@@ -17,6 +17,7 @@ import { AddFamilyMemberDialog } from '@/components/family-tree/AddFamilyMemberD
 import { EditProfileDialog } from '@/components/family-tree/EditProfileDialog';
 import { FamilyMemberDetails } from '@/components/family-tree/FamilyMemberDetails';
 import { CustomConnectionLine } from '@/components/family-tree/CustomConnectionLine';
+import { CustomEdge } from '@/components/family-tree/CustomEdge';
 import { ValidationMessage } from '@/components/family-tree/ValidationMessage';
 import { useFamilyTree } from '@/hooks/useFamilyTree';
 import { ProfileFormData } from '@/interfaces/profile';
@@ -25,6 +26,12 @@ import { FamilyMember } from '@/interfaces/family';
 import { useToast } from '@/components/ui/use-toast';
 import { RelationshipType, RelationshipData } from '@/interfaces/family';
 const nodeTypes = { familyMember: TreeNode };
+const edgeTypes = { 
+  default: CustomEdge,
+  smoothstep: CustomEdge,
+  straight: CustomEdge,
+  sibling: CustomEdge
+};
 
 const FamilyTreeContent = () => {
   const { toast } = useToast();
@@ -153,13 +160,15 @@ const FamilyTreeContent = () => {
         onConnect={onConnect}
         isValidConnection={isValidConnection}
         nodeTypes={nodeTypes}
+        edgeTypes={edgeTypes}
         connectionMode={ConnectionMode.Strict}
         connectionLineComponent={CustomConnectionLine}
         fitView
         minZoom={0.5}
         maxZoom={1.5}
+        proOptions={{ hideAttribution: true }}
         defaultEdgeOptions={{
-          type: 'smoothstep',
+          type: 'default',
           animated: true,
         }}
       >

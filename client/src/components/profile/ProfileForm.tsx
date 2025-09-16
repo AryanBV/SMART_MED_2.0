@@ -20,7 +20,7 @@ import {
   SelectValue,
 } from "@/components/ui/select";
 import { useToast } from "@/components/ui/use-toast";
-import { Gender } from "@/interfaces/profile";
+// Gender type is already defined in the schema below
 
 // Simplified schema for basic profile information
 const profileSchema = z.object({

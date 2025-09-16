@@ -1,6 +1,6 @@
 // Path: C:\Project\SMART_MED_2.0\client\src\components\medical\DocumentUpload.tsx
 
-import React, { useCallback, useState } from 'react';
+import { useCallback, useState } from 'react';
 import { useDropzone } from 'react-dropzone';
 import { FileText, Upload, X, Loader2 } from 'lucide-react';
 import { Card, CardContent } from '@/components/ui/card';
@@ -16,23 +16,21 @@ import {
   SelectValue,
 } from "@/components/ui/select";
 import { useProfile } from '@/hooks/useProfile';
-import type { DocumentType } from '@/interfaces/documentTypes';
+import type { DocumentType } from '@/interfaces/types';
 
 interface DocumentUploadProps {
   onUploadComplete: (file: File, documentType: string, profileId: number) => Promise<void>;
-  onProgress: (progress: number) => void;
   uploadProgress: number;
   selectedProfileId?: number;
 }
 
 const DocumentUpload: React.FC<DocumentUploadProps> = ({
   onUploadComplete,
-  onProgress,
   uploadProgress,
   selectedProfileId
 }) => {
   const { toast } = useToast();
-  const { profiles } = useProfile();
+  const { profile } = useProfile();
   const [file, setFile] = useState<File | null>(null);
   const [documentType, setDocumentType] = useState<DocumentType>('other');
   const [uploadProfileId, setUploadProfileId] = useState<number | undefined>(selectedProfileId);
@@ -108,15 +106,14 @@ const DocumentUpload: React.FC<DocumentUploadProps> = ({
                 <SelectValue placeholder="Select family member" />
               </SelectTrigger>
               <SelectContent>
-                {profiles?.map((profile) => (
+                {profile && (
                   <SelectItem 
                     key={profile.id} 
-                    value={profile.id.toString()}
+                    value={profile.id?.toString() || ''}
                   >
                     {profile.full_name}
-                    {profile.relationship && ` (${profile.relationship})`}
                   </SelectItem>
-                ))}
+                )}
               </SelectContent>
             </Select>
           </div>

@@ -8,14 +8,13 @@ import {
 } from "@/components/ui/dialog";
 import { ProfileForm } from "@/components/profile/ProfileForm";
 import { FamilyMember } from "@/interfaces/family";
-import { ProfileFormData } from "@/interfaces/profile";
 import { useToast } from "@/components/ui/use-toast";
 
 interface EditProfileDialogProps {
   profile: FamilyMember | null;
   isOpen: boolean;
   onClose: () => void;
-  onSave: (profileId: number, data: ProfileFormData) => Promise<void>;
+  onSave: (profileId: number, data: { full_name: string; date_of_birth: string; gender: 'male' | 'female' | 'other' }) => Promise<void>;
 }
 
 export function EditProfileDialog({
@@ -29,7 +28,7 @@ export function EditProfileDialog({
 
   if (!profile) return null;
 
-  const handleSubmit = async (data: ProfileFormData) => {
+  const handleSubmit = async (data: { full_name: string; date_of_birth: string; gender: 'male' | 'female' | 'other' }) => {
     try {
       setIsLoading(true);
       await onSave(profile.id!, data);

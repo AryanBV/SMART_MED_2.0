@@ -12,11 +12,11 @@ export interface RegisterCredentials {
 }
 
 export interface User {
-  id: number;
+  id: string; // Changed to string for UUID
   name: string;
   email: string;
   role: string;
-  profileId: number | null;
+  profileId: string | null; // Changed to string for UUID
   status?: string;
   lastLogin?: Date;
 }
@@ -24,6 +24,7 @@ export interface User {
 export interface AuthResponse {
   user: User;
   token: string;
+  message?: string;
 }
 
 export interface AuthContextType {

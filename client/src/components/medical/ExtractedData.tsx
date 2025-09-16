@@ -1,6 +1,6 @@
 // client/src/components/medical/ExtractedData.tsx
 import React from 'react';
-import { Card, CardContent, CardHeader, CardTitle, CardDescription } from '@/components/ui/card';
+import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card';
 import { Badge } from '@/components/ui/badge';
 import { Pill, Clock, Calendar, XCircle, AlertTriangle, Copy, Check, AlertCircle } from 'lucide-react';
 import { Button } from '@/components/ui/button';

@@ -2,7 +2,7 @@
 
 import { ScrollArea } from '@/components/ui/scroll-area';
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card';
-import { DashboardAppointment } from '@/interfaces/dashboard';
+import { DashboardAppointment } from '@/interfaces/types';
 import { Calendar } from 'lucide-react';
 
 interface UpcomingAppointmentsProps {

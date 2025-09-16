@@ -1,21 +1,16 @@
 // server/services/fileStorage.js
-const mysql = require('mysql2/promise');
 const path = require('path');
 const fs = require('fs').promises;
 const sharp = require('sharp');
-const config = require('../config/database');
+const { supabase } = require('../config/database');
 
 class FileStorageService {
   constructor() {
-    this.pool = mysql.createPool(config);
+    // Initialize with Supabase client
   }
 
   async saveDocument(file, profileId, documentType) {
-    const connection = await this.pool.getConnection();
     try {
-      // Start transaction
-      await connection.beginTransaction();
-
       const {
         originalname,
         filename,
@@ -25,20 +20,23 @@ class FileStorageService {
       } = file;
 
       // Insert document record
-      const [result] = await connection.execute(
-        `INSERT INTO medical_documents 
-        (profile_id, file_name, file_path, file_type, file_size, mime_type, document_type) 
-        VALUES (?, ?, ?, ?, ?, ?, ?)`,
-        [
-          profileId,
-          originalname,
-          filePath,
-          path.extname(originalname),
-          size,
-          mimetype,
-          documentType
-        ]
-      );
+      const { data, error } = await supabase
+        .from('medical_documents')
+        .insert({
+          profile_id: profileId,
+          file_name: originalname,
+          file_path: filePath,
+          file_type: path.extname(originalname),
+          file_size: size,
+          mime_type: mimetype,
+          document_type: documentType
+        })
+        .select()
+        .single();
+
+      if (error) {
+        throw error;
+      }
 
       // If it's an image, create a thumbnail
       if (mimetype.startsWith('image/')) {
@@ -55,65 +53,68 @@ class FileStorageService {
           .toFile(thumbnailPath);
       }
 
-      await connection.commit();
-      return result.insertId;
+      return data.id;
     } catch (error) {
-      await connection.rollback();
       throw error;
-    } finally {
-      connection.release();
     }
   }
 
   async getDocumentsByProfile(profileId) {
-    const [rows] = await this.pool.execute(
-      `SELECT * FROM medical_documents 
-       WHERE profile_id = ? AND is_archived = false 
-       ORDER BY upload_date DESC`,
-      [profileId]
-    );
-    return rows;
+    const { data, error } = await supabase
+      .from('medical_documents')
+      .select('*')
+      .eq('profile_id', profileId)
+      .eq('is_archived', false)
+      .order('upload_date', { ascending: false });
+
+    if (error) {
+      throw error;
+    }
+
+    return data;
   }
 
   async updateDocumentStatus(documentId, status, attempts = null) {
-    await this.pool.execute(
-      `UPDATE medical_documents 
-       SET processed_status = ?, 
-           processing_attempts = COALESCE(?, processing_attempts + 1),
-           last_processed_at = CURRENT_TIMESTAMP 
-       WHERE id = ?`,
-      [status, attempts, documentId]
-    );
+    const updateData = {
+      processed_status: status,
+      last_processed_at: new Date().toISOString()
+    };
+
+    if (attempts !== null) {
+      updateData.processing_attempts = attempts;
+    }
+
+    const { error } = await supabase
+      .from('medical_documents')
+      .update(updateData)
+      .eq('id', documentId);
+
+    if (error) {
+      throw error;
+    }
   }
 
   async saveExtractedMedicines(documentId, medicines) {
-    const connection = await this.pool.getConnection();
     try {
-      await connection.beginTransaction();
+      const medicineData = medicines.map(medicine => ({
+        document_id: documentId,
+        medicine_name: medicine.name,
+        dosage: medicine.dosage || null,
+        frequency: medicine.frequency || null,
+        duration: medicine.duration || null,
+        instructions: medicine.instructions || null,
+        confidence_score: medicine.confidence || 1.0
+      }));
 
-      for (const medicine of medicines) {
-        await connection.execute(
-          `INSERT INTO extracted_medicines 
-          (document_id, medicine_name, dosage, frequency, duration, instructions, confidence_score) 
-          VALUES (?, ?, ?, ?, ?, ?, ?)`,
-          [
-            documentId,
-            medicine.name,
-            medicine.dosage || null,
-            medicine.frequency || null,
-            medicine.duration || null,
-            medicine.instructions || null,
-            medicine.confidence || 1.0
-          ]
-        );
+      const { error } = await supabase
+        .from('extracted_medicines')
+        .insert(medicineData);
+
+      if (error) {
+        throw error;
       }
-
-      await connection.commit();
     } catch (error) {
-      await connection.rollback();
       throw error;
-    } finally {
-      connection.release();
     }
   }
 }

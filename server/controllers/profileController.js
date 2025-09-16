@@ -1,25 +1,35 @@
 // Path: C:\Project\SMART_MED_2.0\server\controllers\profileController.js
 
-const db = require('../config/database');
+const { supabase, supabaseAdmin } = require('../config/database');
 const Profile = require('../models/Profile');
 
 class ProfileController {
     // Keep existing methods
     async getCurrentProfile(req, res) {
         try {
-            console.log('Getting profile for user ID:', req.user.id);
+            console.log('Getting profile for user ID:', req.user.userId);
             
-            const [user] = await db.query('SELECT * FROM users WHERE id = ?', [req.user.id]);
+            const { data: user, error: userError } = await supabase
+                .from('users')
+                .select('*')
+                .eq('id', req.user.userId)
+                .single();
+
+            if (userError) {
+                console.error('Error getting user:', userError);
+                return res.status(500).json({ message: 'Error getting user data' });
+            }
+
             console.log('Found user:', user);
 
-            const profile = await Profile.findByUserId(req.user.id);
+            const profile = await Profile.findByUserId(req.user.userId);
             console.log('Found profile:', profile);
             
             if (!profile) {
                 console.log('No profile found, creating default profile');
                 const defaultProfile = await Profile.create({
-                    user_id: req.user.id,
-                    full_name: user[0].name || 'New User',
+                    user_id: req.user.userId,
+                    full_name: user.name || 'New User',
                     date_of_birth: new Date().toISOString().split('T')[0],
                     gender: 'other',
                     is_parent: true
@@ -46,14 +56,11 @@ class ProfileController {
     async createProfile(req, res) {
         try {
             const profile = await Profile.create({
-                user_id: req.user.id,
+                user_id: req.user.userId,
                 ...req.body
             });
 
-            await db.query(
-                'UPDATE users SET profile_id = ? WHERE id = ?',
-                [profile.id, req.user.id]
-            );
+            // Remove the profile_id update since it doesn't exist in the users table
 
             res.status(201).json(profile);
         } catch (error) {
@@ -71,7 +78,7 @@ class ProfileController {
                 is_parent: Boolean(req.body.is_parent)
             };
 
-            const profile = await Profile.findByUserId(req.user.id);
+            const profile = await Profile.findByUserId(req.user.userId);
             if (!profile) {
                 return res.status(404).json({ message: 'Profile not found' });
             }
@@ -86,7 +93,7 @@ class ProfileController {
 
     async deleteProfile(req, res) {
         try {
-            const profile = await Profile.findByUserId(req.user.id);
+            const profile = await Profile.findByUserId(req.user.userId);
             if (!profile) {
                 return res.status(404).json({ message: 'Profile not found' });
             }
@@ -101,58 +108,56 @@ class ProfileController {
 
     // Add new family-related methods
     async getFamilyProfiles(req, res) {
-        const connection = await db.getConnection();
         try {
             const profileId = req.user.profileId;
-            const [profiles] = await connection.execute(`
-                SELECT DISTINCT 
-                    p.*,
-                    CASE 
-                        WHEN p.id = ? THEN 'self'
-                        WHEN fr.is_spouse = true THEN 'spouse'
-                        ELSE fr.relationship_type
-                    END as relationship
-                FROM profiles p
-                LEFT JOIN family_relations fr ON 
-                    (fr.parent_profile_id = ? AND fr.child_profile_id = p.id)
-                    OR (fr.child_profile_id = ? AND fr.parent_profile_id = p.id)
-                WHERE p.id = ? OR fr.relationship_type IS NOT NULL
-            `, [profileId, profileId, profileId, profileId]);
-
-            res.json(profiles);
+            const familyMembers = await Profile.findFamilyMembers(profileId);
+            res.json(familyMembers);
         } catch (error) {
             console.error('Error in getFamilyProfiles:', error);
             res.status(500).json({ message: 'Server error' });
-        } finally {
-            connection.release();
         }
     }
 
     async getFamilyMember(req, res) {
-        const connection = await db.getConnection();
         try {
             const { id } = req.params;
             const profileId = req.user.profileId;
 
-            const [profiles] = await connection.execute(`
-                SELECT p.*, fr.relationship_type
-                FROM profiles p
-                LEFT JOIN family_relations fr ON 
-                    (fr.parent_profile_id = ? AND fr.child_profile_id = p.id)
-                    OR (fr.child_profile_id = ? AND fr.parent_profile_id = p.id)
-                WHERE p.id = ?
-            `, [profileId, profileId, id]);
-
-            if (!profiles.length) {
-                return res.status(404).json({ message: 'Family member not found' });
+            // Check if user has access to this family member
+            const hasAccess = await Profile.hasAccessPermission(profileId, id);
+            if (!hasAccess) {
+                return res.status(403).json({ message: 'Access denied' });
             }
 
-            res.json(profiles[0]);
+            // Get the profile
+            const { data: profile, error } = await supabase
+                .from('profiles')
+                .select('*')
+                .eq('id', id)
+                .single();
+
+            if (error) {
+                if (error.code === 'PGRST116') {
+                    return res.status(404).json({ message: 'Family member not found' });
+                }
+                throw error;
+            }
+
+            // Get relationship info
+            const { data: relation } = await supabase
+                .from('family_relations')
+                .select('relationship_type')
+                .or(`parent_profile_id.eq.${profileId},child_profile_id.eq.${profileId}`)
+                .or(`parent_profile_id.eq.${id},child_profile_id.eq.${id}`)
+                .single();
+
+            res.json({
+                ...profile,
+                relationship_type: relation?.relationship_type || null
+            });
         } catch (error) {
             console.error('Error in getFamilyMember:', error);
             res.status(500).json({ message: 'Server error' });
-        } finally {
-            connection.release();
         }
     }
 }

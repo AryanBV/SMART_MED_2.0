@@ -1,20 +1,21 @@
 // server/models/Profile.js
-const db = require('../config/database');
+const { supabase, supabaseAdmin } = require('../config/database');
 
 class Profile {
     static async findByUserId(userId) {
         try {
-            console.log('Executing findByUserId query for userId:', userId);
-            const [rows] = await db.query(
-                `SELECT id, user_id, full_name, 
-                DATE_FORMAT(date_of_birth, '%Y-%m-%d') as date_of_birth, 
-                gender, blood_group, is_parent, profile_type, profile_status,
-                emergency_contact, notes, created_at, updated_at 
-                FROM profiles WHERE user_id = ?`,
-                [userId]
-            );
-            console.log('Query result:', rows);
-            return rows[0] || null;
+            const { data, error } = await supabase
+                .from('profiles')
+                .select('id, user_id, full_name, date_of_birth, gender, blood_group, is_parent, profile_type, profile_status, emergency_contact, notes, created_at, updated_at')
+                .eq('user_id', userId);
+            
+            if (error) {
+                throw error;
+            }
+            
+            // Return first result or null if no results
+            const result = data && data.length > 0 ? data[0] : null;
+            return result;
         } catch (error) {
             console.error('Error in findByUserId:', error);
             throw error;
@@ -23,90 +24,67 @@ class Profile {
 
     static async create(profileData) {
         try {
-            // Start a transaction using the connection pool
-            await db.query('START TRANSACTION');
-
             // Set default values for required fields
             const data = {
                 user_id: profileData.user_id,
                 full_name: profileData.full_name,
-                date_of_birth: new Date(profileData.date_of_birth).toISOString().split('T')[0], // Format date
+                date_of_birth: profileData.date_of_birth,
                 gender: profileData.gender,
                 blood_group: profileData.blood_group || null,
-                is_parent: profileData.is_parent ? 1 : 0,
-                profile_type: profileData.profile_type || 'primary',
+                is_parent: profileData.is_parent || false,
+                profile_type: profileData.profile_type || 'family_member',
                 profile_status: profileData.profile_status || 'active',
                 emergency_contact: profileData.emergency_contact || null,
                 notes: profileData.notes || null
             };
 
-            console.log('Attempting to create profile with data:', data);
+            const { data: newProfile, error } = await supabase
+                .from('profiles')
+                .insert(data)
+                .select('id, user_id, full_name, date_of_birth, gender, blood_group, is_parent, profile_type, profile_status, emergency_contact, notes, created_at, updated_at')
+                .single();
 
-            const [result] = await db.query(
-                `INSERT INTO profiles 
-                (user_id, full_name, date_of_birth, gender, blood_group, 
-                is_parent, profile_type, profile_status, emergency_contact, notes) 
-                VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?)`,
-                [
-                    data.user_id, data.full_name, data.date_of_birth, 
-                    data.gender, data.blood_group, data.is_parent,
-                    data.profile_type, data.profile_status,
-                    data.emergency_contact, data.notes
-                ]
-            );
+            if (error) {
+                throw error;
+            }
 
-            const [newProfile] = await db.query(
-                `SELECT id, user_id, full_name, 
-                DATE_FORMAT(date_of_birth, '%Y-%m-%d') as date_of_birth, 
-                gender, blood_group, is_parent, profile_type, profile_status,
-                emergency_contact, notes, created_at, updated_at 
-                FROM profiles WHERE id = ?`,
-                [result.insertId]
-            );
-
-            await db.query('COMMIT');
-            console.log('Successfully created profile:', newProfile[0]);
-            return newProfile[0];
+            return newProfile;
 
         } catch (error) {
             console.error('Error in create profile:', error);
-            await db.query('ROLLBACK');
             throw error;
         }
     }
 
     static async update(profileId, profileData) {
         try {
-            const [result] = await db.query(
-                `UPDATE profiles 
-                SET full_name = ?, date_of_birth = ?, gender = ?, 
-                    blood_group = ?, is_parent = ?, profile_type = ?, 
-                    profile_status = ?, emergency_contact = ?, notes = ?
-                WHERE id = ?`,
-                [
-                    profileData.full_name,
-                    new Date(profileData.date_of_birth).toISOString().split('T')[0],
-                    profileData.gender,
-                    profileData.blood_group || null,
-                    profileData.is_parent ? 1 : 0,
-                    profileData.profile_type || 'primary',
-                    profileData.profile_status || 'active',
-                    profileData.emergency_contact || null,
-                    profileData.notes || null,
-                    profileId
-                ]
-            );
+            const updateData = {
+                full_name: profileData.full_name,
+                date_of_birth: profileData.date_of_birth,
+                gender: profileData.gender,
+                blood_group: profileData.blood_group || null,
+                is_parent: profileData.is_parent || false,
+                profile_type: profileData.profile_type || 'primary',
+                profile_status: profileData.profile_status || 'active',
+                emergency_contact: profileData.emergency_contact || null,
+                notes: profileData.notes || null
+            };
 
-            if (result.affectedRows === 0) {
-                throw new Error('Profile not found');
+            const { data: updatedProfile, error } = await supabase
+                .from('profiles')
+                .update(updateData)
+                .eq('id', profileId)
+                .select()
+                .single();
+
+            if (error) {
+                if (error.code === 'PGRST116') {
+                    throw new Error('Profile not found');
+                }
+                throw error;
             }
 
-            const [updatedProfile] = await db.query(
-                `SELECT * FROM profiles WHERE id = ?`,
-                [profileId]
-            );
-
-            return updatedProfile[0];
+            return updatedProfile;
         } catch (error) {
             console.error('Error in update:', error);
             throw error;
@@ -115,73 +93,83 @@ class Profile {
 
     static async findFamilyMembers(profileId) {
         try {
-            // Modified query to use correct column names
-            const [rows] = await db.query(`
-                WITH profile_documents AS (
-                    SELECT 
-                        profile_id,
-                        id as document_id,
-                        document_type,
-                        processed_status,
-                        last_processed_at,
-                        created_at as document_created_at
-                    FROM medical_documents
-                    ORDER BY created_at DESC
-                )
-                SELECT DISTINCT 
-                    p.*,
-                    fr.relationship_type,
-                    fr.relation_type,
-                    pd.document_id,
-                    pd.document_type,
-                    pd.processed_status,
-                    pd.last_processed_at,
-                    pd.document_created_at
-                FROM profiles p
-                LEFT JOIN family_relations fr ON 
-                    (fr.parent_profile_id = ? AND fr.child_profile_id = p.id)
-                    OR (fr.child_profile_id = ? AND fr.parent_profile_id = p.id)
-                LEFT JOIN profile_documents pd ON pd.profile_id = p.id
-                WHERE p.id = ? 
-                   OR fr.parent_profile_id = ? 
-                   OR fr.child_profile_id = ?
-                ORDER BY p.id, pd.document_created_at DESC`,
-                [profileId, profileId, profileId, profileId, profileId]
-            );
-    
-            // Rest of the method remains the same
+            // Get family relations first
+            const { data: relations, error: relationsError } = await supabase
+                .from('family_relations')
+                .select('*')
+                .or(`parent_profile_id.eq.${profileId},child_profile_id.eq.${profileId}`);
+
+            if (relationsError) {
+                throw relationsError;
+            }
+
+            // Get all related profile IDs
+            const relatedProfileIds = new Set([profileId]);
+            relations.forEach(relation => {
+                relatedProfileIds.add(relation.parent_profile_id);
+                relatedProfileIds.add(relation.child_profile_id);
+            });
+
+            // Get all profiles
+            const { data: profiles, error: profilesError } = await supabase
+                .from('profiles')
+                .select('*')
+                .in('id', Array.from(relatedProfileIds));
+
+            if (profilesError) {
+                throw profilesError;
+            }
+
+            // Get documents for these profiles
+            const { data: documents, error: documentsError } = await supabase
+                .from('medical_documents')
+                .select('profile_id, id, document_type, processed_status, last_processed_at, created_at')
+                .in('profile_id', Array.from(relatedProfileIds))
+                .order('created_at', { ascending: false });
+
+            if (documentsError) {
+                throw documentsError;
+            }
+
+            // Build the result map
             const membersMap = new Map();
-            rows.forEach(row => {
-                if (!membersMap.has(row.id)) {
-                    membersMap.set(row.id, {
-                        id: row.id,
-                        name: row.full_name,
-                        dateOfBirth: row.date_of_birth,
-                        gender: row.gender,
-                        bloodGroup: row.blood_group,
-                        relationshipType: row.relationship_type,
-                        relationType: row.relation_type,
-                        documents: [],
-                        profileType: row.profile_type,
-                        profileStatus: row.profile_status,
-                        emergencyContact: row.emergency_contact,
+            
+            profiles.forEach(profile => {
+                // Find relationship for this profile
+                const relation = relations.find(r => 
+                    (r.parent_profile_id === profileId && r.child_profile_id === profile.id) ||
+                    (r.child_profile_id === profileId && r.parent_profile_id === profile.id)
+                );
+
+                membersMap.set(profile.id, {
+                    id: profile.id,
+                    name: profile.full_name,
+                    dateOfBirth: profile.date_of_birth,
+                    gender: profile.gender,
+                    bloodGroup: profile.blood_group,
+                    relationshipType: relation?.relationship_type || null,
+                    relationType: relation?.relation_type || null,
+                    documents: [],
+                    profileType: profile.profile_type,
+                    profileStatus: profile.profile_status,
+                    emergencyContact: profile.emergency_contact,
+                });
+            });
+
+            // Add documents to members
+            documents.forEach(doc => {
+                const member = membersMap.get(doc.profile_id);
+                if (member) {
+                    member.documents.push({
+                        id: doc.id,
+                        type: doc.document_type,
+                        status: doc.processed_status,
+                        lastProcessed: doc.last_processed_at,
+                        createdAt: doc.created_at
                     });
                 }
-                
-                if (row.document_id) {
-                    const member = membersMap.get(row.id);
-                    if (!member.documents.some(d => d.id === row.document_id)) {
-                        member.documents.push({
-                            id: row.document_id,
-                            type: row.document_type,
-                            status: row.processed_status,
-                            lastProcessed: row.last_processed_at,
-                            createdAt: row.document_created_at
-                        });
-                    }
-                }
             });
-    
+
             return Array.from(membersMap.values());
         } catch (error) {
             console.error('Error in findFamilyMembers:', error);
@@ -193,13 +181,15 @@ class Profile {
         try {
             if (requesterId === targetId) return true;
     
-            const [relations] = await db.query(
-                `SELECT relationship_type 
-                FROM family_relations 
-                WHERE (parent_profile_id = ? AND child_profile_id = ?)
-                OR (parent_profile_id = ? AND child_profile_id = ?)`,
-                [requesterId, targetId, targetId, requesterId]
-            );
+            const { data: relations, error } = await supabase
+                .from('family_relations')
+                .select('relationship_type')
+                .or(`parent_profile_id.eq.${requesterId},child_profile_id.eq.${requesterId}`)
+                .or(`parent_profile_id.eq.${targetId},child_profile_id.eq.${targetId}`);
+    
+            if (error) {
+                throw error;
+            }
     
             if (!relations.length) return false;
     
