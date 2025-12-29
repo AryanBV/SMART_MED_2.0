@@ -1,0 +1,10 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 280 70">
+  <rect width="280" height="70" fill="white"/>
+  <text x="15" y="45" font-family="Arial" font-size="32" font-weight="bold" fill="#2DD4BF">
+    SMART_MED
+  </text>
+  <!-- Adjusted cross symbol -->
+  <path d="M220 20 L235 35 L250 20" stroke="#2DD4BF" stroke-width="4" fill="none"/>
+  <!-- Adjusted circle -->
+  <circle cx="235" cy="47" r="14" stroke="#2DD4BF" stroke-width="4" fill="white"/>
+</svg>

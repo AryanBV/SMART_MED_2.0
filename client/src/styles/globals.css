@@ -1,0 +1,80 @@
+@tailwind base;
+@tailwind components;
+@tailwind utilities;
+ 
+@layer base {
+  :root {
+    --background: 0 0% 100%;
+    --foreground: 222.2 84% 4.9%;
+
+    --card: 0 0% 100%;
+    --card-foreground: 222.2 84% 4.9%;
+ 
+    --popover: 0 0% 100%;
+    --popover-foreground: 222.2 84% 4.9%;
+ 
+    --primary: 187 47% 55%;
+    --primary-foreground: 210 40% 98%;
+ 
+    --secondary: 152 76% 44%;
+    --secondary-foreground: 210 40% 98%;
+ 
+    --muted: 210 40% 96.1%;
+    --muted-foreground: 215.4 16.3% 46.9%;
+ 
+    --accent: 199 89% 48%;
+    --accent-foreground: 222.2 47.4% 11.2%;
+ 
+    --destructive: 0 84.2% 60.2%;
+    --destructive-foreground: 210 40% 98%;
+
+    --border: 214.3 31.8% 91.4%;
+    --input: 214.3 31.8% 91.4%;
+    --ring: 187 47% 55%;
+ 
+    --radius: 0.5rem;
+  }
+}
+
+@layer base {
+  * {
+    @apply border-border;
+  }
+  body {
+    @apply bg-background text-foreground;
+  }
+}
+
+@layer components {
+  .react-flow__node {
+    @apply transition-all duration-200;
+  }
+  
+  .react-flow__handle {
+    @apply opacity-0 group-hover:opacity-100 transition-opacity duration-200;
+  }
+
+  .react-flow__controls {
+    @apply !bg-white/90 !shadow-lg !border-0 !backdrop-blur-sm rounded-lg overflow-hidden;
+  }
+
+  .react-flow__controls-button {
+    @apply !border-0 !bg-transparent hover:!bg-gray-50 !w-8 !h-8;
+  }
+
+  .react-flow__minimap {
+    @apply !bg-white/90 !shadow-lg !border-0 !backdrop-blur-sm rounded-lg overflow-hidden;
+  }
+
+  .dashboard-layout {
+    @apply min-h-screen bg-gray-50;
+  }
+
+  .dashboard-content {
+    @apply flex-1 px-8 py-6 overflow-auto;
+  }
+
+  .family-tree-container {
+    @apply bg-white rounded-lg shadow-sm p-6;
+  }
+}
